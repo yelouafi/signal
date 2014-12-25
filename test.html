@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+</head>
+<body>
+
+<div>
+	<p> Watchdog
+		<p>
+			<button id="order">Order</button> 
+			<button id="done">Done</button>
+		</p>
+		<p>Timer <span id='timer' ></span></p>
+		<p>Counter <span id='counter' ></span></p>
+		<p>Alarm <span  id="alarm"></span></p>
+	</p>
+</div>
+<div>
+	<p> UpDown
+		<p>
+			<button id="up">Up</button> 
+			<button id="down">Dwon</button>
+		</p>
+		<p>Count <span id='count' ></span></p>
+	</p>
+</div>
+
+<script src="signal.js"></script>
+<script src="signal.dom.js"></script>
+<script>
+
+
+function sum(a,b) { return a+b }
+ss	.or( $$('up').click(1), $$('down').click(-1) )
+	.reduce(0, sum)
+	.$to('#count')
+
+
+var wdog = function( delay ) {
+	var tick = ss.seconds().$to('#timer')
+	var counter = ss.def(
+		-1,
+		[order, 0],
+		[done, -1],
+		[tick, function(v) { 
+			var cnt = counter();
+			return cnt <= delay && cnt > -1 ? cnt + 1 : -1;
+		}]
+		
+	).$to('#counter');
+	var alarm = ss.def('',
+		[$$('up').or(done), ''],
+		[counter.whenGt(delay), counter]
+	).$to('#alarm');
+	alarm.counter = counter;
+	return alarm;
+}
+
+
+</script>
+</body>
+</html>

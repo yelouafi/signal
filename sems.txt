@@ -1,0 +1,60 @@
+
+Domains
+=============================================================
+
+Program Value 
+	PV : all values usable by the conventional programming 
+	
+Program Function
+	F: [PV] -> PV
+	A function over normal program values
+	
+	
+Neant
+	NA: null equivalent for signals
+
+Value
+	V = V || NA
+	
+Time
+	T : [t0, t1, ...., tn]
+
+Signal
+	S: T -> V
+	a value that varies over time
+
+Continuous Signal (Property)
+	P: T -> PV
+	a signal function defined for all values of T, always produces a non NA value
+	
+
+Operators
+==================================================================
+
+or
+	or : [S] -> S
+	or	[s] t	=	fst( [s(t)] != NA )(t)
+					otherwise -> NA
+	
+map
+	map: F -> [S] -> S
+	map f, [s], t = f( all( [s(t)] != NA ) )
+					otherwise NA
+	
+filter
+	filter: F -> S -> S
+	filter f s t = map { f( s(t) ) ? s(t) : NA }  s t
+	
+reduce
+	reduce: PV -> F -> S -> S
+	reduce pv f s t =	if s(t) == NA -> pv
+						else f( pv, s(t) )
+	
+def
+	def: V -> [( S, F )] -> S
+	def v [(s,f)] t =	fst( [f(s(t))] != NA )
+						otherwise v
+
+	
+
+	
