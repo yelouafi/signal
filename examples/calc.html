@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+
+<style>
+	td {
+		border: 1px solid #ddd;
+		background-color: #eee;
+		width: 60px;
+		height: 40px;
+		text-align: center;
+		vertical-align: center;
+	}
+	
+	td:hover {
+		background-color: #e6e6e6;
+	}
+	
+	#output {
+		border: 1px solid #ddd;
+		background-color: #fff;
+	}
+</style>
+
+</head>
+<body>
+
+<div>
+	<p> Calculator
+		<table>
+			<tbody>
+				<tr>
+					<td colspan=4 id="output"></td>
+				</tr>
+			</tbody>
+			<tbody id="buttons">
+				<tr>
+					<td>7</td><td>8</td><td>9</td><td>/</td>
+				</tr>
+				<tr>
+					<td>4</td><td>5</td><td>6</td><td>*</td>
+				</tr>
+				<tr>
+					<td>1</td><td>2</td><td>3</td><td>-</td>
+				</tr>
+				<tr>
+					<td>0</td><td>,</td><td>=</td><td>+</td>
+				</tr>
+			</tbody>
+			
+		</table>
+	</p>
+</div>
+<script src="../signal.js"></script>
+<script src="../signal.dom.js"></script>
+<script>
+	
+	function concat( t, t1 ) { return t + t1 };
+	
+	var btn = $$('buttons').$click('td', '.target.textContent');
+	$$('output').text( btn.reduce( '', concat ) );
+
+</script>
+</body>
+</html>

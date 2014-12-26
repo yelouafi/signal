@@ -4,11 +4,37 @@ var ss = window.ss, _ = window.ss.fn;
 window.$$ = sigel;
 ss.domSig= domSig;
 ss.domSlot = domSlot;
+
+var indexOf = Array.prototype.indexOf;
+function delegate( root ) {
+	var eventRegistry = {};
+	root = root || document;
+	
+	function dispatchEvent( event ) {
+		var target = event.target;
+		_.each( eventRegistry[event.type], function ( entry ) {
+			if( target.matches( entry.selector ) )
+				entry.handler.call(target, event);
+		});
+	}
+	return function (selector, event, handler) {
+		if ( !eventRegistry[event] ) {
+			eventRegistry[event] = [];
+			root.addEventListener(event, dispatchEvent, true);
+		}
+		eventRegistry[event].push({
+			selector: selector,
+			handler: handler
+		});
+	};
+}
 	
 function Sigel(el) {
 	this.el = el;
 	this.signals = {};
+	this.liveSignals = {};
 	this.slots = {};
+	this.live = delegate(this.el);
 }
 
 var sigelCache = window.$sigcache = { $doc: new Sigel(document) }, uuid = 0;
@@ -39,6 +65,21 @@ function domSig( sigName, event, getter, target, init ) {
 	return init ? sig.map( fn ) : ss.def( init, [sig, fn] );
 }
 
+function domLiveSig( sigName, delegate, selector, event, getter ) {
+	var sigkey = sigName+selector+event;
+	var sig = delegate.liveSignals[sigkey];
+	if( !sig ) {
+		var events = Array.isArray(event) ? event : event.trim().split(/\s+/g);
+		sig = ss.signal();
+		_.each(events, function(ev) {
+			delegate.live( selector, ev, sig.$$emit.bind(sig) ); 
+		});
+		delegate.signals[sigkey] = sig;
+	}
+	var fn = _.template( getter, delegate.el );
+	return sig.map( fn );
+}
+
 function domSlot( slotName, setter, target, src ) {
 	target = target instanceof EventTarget ? target : document.getElementById(target);
 	var sel = sigel(target);
@@ -60,6 +101,9 @@ _.each(	['click', 'dblclick', 'mousedown', 'mouseup', 'mouseover', 'mousemove', 
 	function(ev) {  
 		Sigel.prototype[ev] = function (getter) { 
 			return domSig( ev, ev, getter, this.el ); 
+		};
+		Sigel.prototype['$'+ev] = function (selector, getter) { 
+			return domLiveSig( ev, this, selector, ev, getter ); 
 		};
 	});
 
@@ -99,7 +143,7 @@ function setCss( val ) {
 	var sel = sigel(this);
 	var oldclss = sel.$$dyncss;
 	sel.$$dyncss = _.isObj( val ) ?  
-						_.filter( Object.keys( val ), objGetter(val) ) : 
+						_.filter( Object.keys( val ), _.objGetter(val) ) : 
 						String( val || '' ).match(/\S+/g);
 	if(oldclss) _.each( oldclss, function(c) { me.classList.remove(c); } );
 	if(sel.$$dyncss) _.each( sel.$$dyncss, function(c) { me.classList.add(c); } );

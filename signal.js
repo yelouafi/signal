@@ -1,7 +1,7 @@
 (function() {
 
-window.ss = { 	signal: signal, collect: collect, combine: combine, or: or, and: and, map: smap, def: def, slot: slot,
-				lift: lift, reduce: sreduce, zwitch: sswitch, cycle: cycle, array: array,
+window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine, or: or, and: and, map: smap, def: def, slot: slot, if: iif,
+				lift: lift, reduce: sreduce, cycle: cycle, array: array,
 				timer: timer, seconds: seconds, clock: clock, assign: assignDom, printGraph: printGraph 
 			}
 
@@ -240,6 +240,7 @@ function collect( sources, cb ) {
 }
 
 function combine( sources, fn ) {
+	sources = map( sources, function( s ) { return isObj( s ) ? combineObj( s ) : s; });
 	var collection = collect( sources, handle );
 	var sig = signal( fn( collection.startValues, null, -1 ) );
 	sig.$$sources = collection.sources;
@@ -256,11 +257,28 @@ function combine( sources, fn ) {
 	}
 }
 
+function combineObj( obj ) {
+	var args = [], keys = Object.keys(obj);
+	eachKey( keys, function( key ) { args.push( obj[key] ); });
+	return combine( args, handle );
+	
+	function handle( values, src, idx ) {
+		var res = {};
+		each( keys, function( key, idx ) {
+			var vk = values[idx];
+			if( vk !== neant )
+				res[key] = vk;
+		});
+		return res;
+	}
+}
+
+
 function slot( fn ) {
 	var src = null;
 	return function slotFn( s ) {
 		src && src.deactivate();
-		src = smap( s, function(v) { fn(v); return v; } );
+		src = smap( s, function(v) { fn(v); } );
 		return s;
 	}
 }
@@ -277,6 +295,12 @@ function and() {
 	return combine( args, function( values, src, _ ) {
 		return src && !any( values, neant ) ? src() : neant;
 	});
+}
+
+function iif( cond, then, elze ) {
+	return smap( cond, then, elze, function( c, th, el ) {
+		return c ? th : el;
+	} )
 }
 
 function smap() {
@@ -317,13 +341,6 @@ function sreduce( source, startValue, fn ) {
 	return def( startValue,
 		[source, reducer(startValue, fn)]
 	);
-}
-
-function sswitch(source, start, end) {
-	var occ = source.reduce( false, true );
-	return smap( start, end, occ, function( o, s, e ) {
-		return o ? e : s;
-	} )
 }
 
 function cycle(source, first, second) {

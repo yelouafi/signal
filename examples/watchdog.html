@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+
+<style>
+	.blink {
+		color: red;
+		animation: blink .75s linear infinite;
+		-webkit-animation: blink .75s linear infinite;
+	}
+	@-webkit-keyframes blink {
+		0% { opacity: 1; }
+		50% { opacity: 1; }
+		50.01% { opacity: 0; }
+		100% { opacity: 0; }
+	}
+
+
+</style>
+
+</head>
+<body>
+
+<div>
+	<p> Watchdog
+		<p>
+			<button id="order">Order</button> 
+			<button id="done">Done</button>
+		</p>
+		<p>Timer <span id='timer' ></span></p>
+		<p>Counter <span id='counter' ></span></p>
+		<p id="alarm">Alarm <span  id="alarmText"></span></p>
+	</p>
+</div>
+<script src="../signal.js"></script>
+<script src="../signal.dom.js"></script>
+<script>
+		
+function watchdog( delay, tick, order, done ) {
+	
+	var counter = ss.def(
+		-1,				// start value
+		[order, 0],		// on order start counter
+		[done, -1],		// on done reset counter to -1
+		[tick, function(v) { 
+			var cnt = counter();
+			return cnt > -1 ? cnt + 1 : -1;
+		}]				// on each tick increment counter if we are inside an order	
+	);
+	
+	return {
+		alarm: counter.gt(delay),
+		counter: counter
+	};
+}
+
+var tick 	= ss.seconds().$to('#timer'),
+	order 	= $$('order').click(),
+	done 	= $$('done').click(),
+	wd = watchdog( 5, tick, order, done );
+
+$$('counter').text( wd.counter );
+$$('alarmText').text( ss.if( wd.alarm, wd.counter, 'NA' ) );
+$$('alarm').css({ blink: wd.alarm });
+
+
+
+</script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<head>
+</head>
+<body>
+
+<div>
+	<p> Up && Down
+		<p>
+			<button id="up">Up</button> 
+			<button id="down">Dwon</button>
+		</p>
+		<p>Count <span id='count' ></span></p>
+	</p>
+</div>
+
+<script src="../signal.js"></script>
+<script src="../signal.dom.js"></script>
+<script>
+
+ss	.or( $$('up').click(1), $$('down').click(-1) )
+	.reduce(0, function (prev, cur) { return prev + cur })
+	.$to('#count')
+
+</script>
+</body>
+</html>
