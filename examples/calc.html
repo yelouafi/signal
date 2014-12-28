@@ -75,27 +75,24 @@
 	}
 	function fmt(s) { return s.join(' '); }
 	
-	var btn = $$('buttons').$click('td', '.target.textContent');
-	var op = btn.filter( isOp ),
-		digit = btn.filter( isDigit );
+	var cmd = ss.or( $$('buttons').$click('td', '.target.textContent'), $document.keyChar());
+	var op = cmd.filter( isOp ),
+		digit = cmd.filter( isDigit ),
+		eq = cmd.filter('=');
 	
-	function arrRepHead(arr, newHead, fn) {
-		var head = arr[arr.length-1];
-		return arr.slice(0, arr.length-1).concat( fn ? fn(head,newHead) : newHead  );
-	}
-	var calc = ss.fsm( ['dig', 0], [
+	var stream = ss.fsm( ['dig', [0]],
 		[eq, 			function( p ) { return [ 'digEq', [ calc(p) ] ] } ],
 		[op, {
 			'op':		function( p, o ) { return ['op', p.slice(0, p.length-1).concat(o)] },
 			'*':		function( p, o ) { return ['op', p.concat(o)] }
 		}],
 		[digit, {
-			'dig':		function( p, o ) { return ['dig', p.slice(0, p.length-1).concat( p[p.length-1] + '' + o ) }] },
-			'op':		function( p, d ) { return ['dig', p.concat(o)] },
-			'digEq':	function( p, d ) { return ['dig', p.slice(0, p.length-1).concat(o)]] },
+			'dig':		function( p, d ) { return ['dig', p.slice(0, p.length-1).concat( +(p[p.length-1] + '' + d ))] },
+			'op':		function( p, d ) { return ['dig', p.concat(d)] },
+			'digEq':	function( p, d ) { return ['dig', p.slice(0, p.length-1).concat(d)] },
 		}]
 	
-	]);
+	);
 	$$('output').text( stream.map( fmt ) );
 
 </script>

@@ -1,7 +1,7 @@
 (function() {
 
 window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine, or: or, and: and, map: smap, def: def, slot: slot, if: iif,
-				lift: lift, reduce: sreduce, cycle: cycle, array: array,
+				lift: lift, reduce: sreduce, cycle: cycle, array: array, fsm: fsm,
 				timer: timer, seconds: seconds, clock: clock, assign: assignDom, printGraph: printGraph 
 			}
 
@@ -337,6 +337,21 @@ function def( start, reactions /*, ... */ ) {
 	}
 }
 
+function fsm( state, transitions /*, ... */ ) {
+	var sources = map( slice.call(arguments, 1), connect );
+	return combine( sources, function( values, src, _ ) {
+		return ( !src ? state : (state = src()) )[1];
+	});
+	
+	function connect( evtr ) {
+		var ev = evtr[0], tr = evtr[1];
+		return smap( ev.occ, function( v ) {
+			var ctr = makeFn(tr, isObj (tr) ? tr[state[0]] || tr['*'] : id );
+			return ctr(state[1], v);
+		})
+	}
+}
+
 function lift( fn ) {
 	return function() {
 		return smap( [].concat( slice.call( arguments ), fn ) );
@@ -344,6 +359,7 @@ function lift( fn ) {
 }
 
 function sfilter( source, test ) {
+	test = makeFn(test, eq.bind(null, test));
 	return def( neant,
 		[source, function(v) { return test(v) ? v : neant; }]
 	);

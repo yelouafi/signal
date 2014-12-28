@@ -37,9 +37,10 @@ function Sigel(el) {
 	this.live = delegate(this.el);
 }
 
-var sigelCache = window.$sigcache = { $doc: new Sigel(document) }, uuid = 0;
+var sigelCache = window.$sigcache = {}, uuid = 0;
+window.$document = new Sigel(document);
 function sigel(el) {
-	if(el === document) return $doc;
+	if(el === document) return window.$document;
 	el = el instanceof Element ? el : document.getElementById(el);
 	var ret = sigelCache[el.dataset.segid];
 	if( !ret ) {
@@ -61,7 +62,7 @@ function domSig( sigName, event, getter, target, init ) {
 		});
 		sel.signals[sigkey] = sig;
 	}
-	var fn = _.template( getter, target );
+	var fn = _.template( getter || _.id, target );
 	return init ? sig.map( fn ) : ss.def( init, [sig, fn] );
 }
 
@@ -107,7 +108,13 @@ _.each(	['click', 'dblclick', 'mousedown', 'mouseup', 'mouseover', 'mousemove', 
 		};
 	});
 
-_.each( 	[	['val'		,'input'	,'value'], 
+Sigel.prototype.keyChar = function (getter) { 
+	return domSig( 'keyChar', 'keypress', 
+		function(e) { return String.fromCharCode(e.keyCode)}, 
+		this.el ); 
+};
+
+_.each(	[	['val'		,'input'	,'value'], 
 			['checked'	,'change'	,'checked']
 		], 
 	function( opt ) {
