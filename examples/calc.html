@@ -55,10 +55,48 @@
 <script src="../signal.dom.js"></script>
 <script>
 	
-	function concat( t, t1 ) { return t + t1 };
+	function isDigit(c) { return /\d/.test(c); }
+	function isOp(c) { return '+-*/'.indexOf(c) >= 0; }
+	function calc(st) {
+		var opmap = {
+			'+': function(a, b) { return a+b },
+			'-': function(a, b) { return a-b },
+			'*': function(a, b) { return a*b },
+			'/': function(a, b) { return a/b }
+		}
+		var res = st[0];
+		for(var i=1; i<st.length; i+=2) {
+			var n = st[i+1], op = st[i];
+			if( n !== undefined ) {
+				res = opmap[op](res, +n);
+			}
+		}
+		return res;
+	}
+	function fmt(s) { return s.join(' '); }
 	
 	var btn = $$('buttons').$click('td', '.target.textContent');
-	$$('output').text( btn.reduce( '', concat ) );
+	var op = btn.filter( isOp ),
+		digit = btn.filter( isDigit );
+	
+	function arrRepHead(arr, newHead, fn) {
+		var head = arr[arr.length-1];
+		return arr.slice(0, arr.length-1).concat( fn ? fn(head,newHead) : newHead  );
+	}
+	var calc = ss.fsm( ['dig', 0], [
+		[eq, 			function( p ) { return [ 'digEq', [ calc(p) ] ] } ],
+		[op, {
+			'op':		function( p, o ) { return ['op', p.slice(0, p.length-1).concat(o)] },
+			'*':		function( p, o ) { return ['op', p.concat(o)] }
+		}],
+		[digit, {
+			'dig':		function( p, o ) { return ['dig', p.slice(0, p.length-1).concat( p[p.length-1] + '' + o ) }] },
+			'op':		function( p, d ) { return ['dig', p.concat(o)] },
+			'digEq':	function( p, d ) { return ['dig', p.slice(0, p.length-1).concat(o)]] },
+		}]
+	
+	]);
+	$$('output').text( stream.map( fmt ) );
 
 </script>
 </body>

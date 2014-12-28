@@ -5,10 +5,10 @@ window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine,
 				timer: timer, seconds: seconds, clock: clock, assign: assignDom, printGraph: printGraph 
 			}
 
-var sfns = window.ss.fn = { noop: noop, 
+var sfns = window.ss.fn = { noop: noop, lbind: lbind, rbind: rbind,
 	logger: logger, isStr: isStr, isObj: isObj, isFn: isFn, isSig: isSig, occ: occ, 
 	eq: eq, notEq: notEq, gt: gt, gte: gte, lt: lt, lte: lte, not: not, inc: inc, 
-	or: or, and: and, id: id, val: valFn, makeFn: makeFn, callwArg: callwArg, call: call, propGetter: propGetter, objGetter: objGetter, getProp: getProp,
+	or: or, and: and, id: id, val: valFn, makeFn: makeFn, callw: callw, propGetter: propGetter, objGetter: objGetter, getProp: getProp,
 	each: each, map: map, eachKey: eachKey, mapObj: mapObj, any: any, first: first, pipe: pipe, filter: filter, reducer: reducer,
 	templateArr: templateArr, templateObj: templateObj, template: template
 };
@@ -17,6 +17,7 @@ var sfns = window.ss.fn = { noop: noop,
 var neant = new function Neant() {}
 
 var slice 					= Array.prototype.slice;
+var bind					= Function.prototype.bind;
 function logger(prefix) 	{ return function(msg) { console.log( prefix, msg ); } };
 function isStr(arg) 		{ return (typeof arg === 'string'); }
 function isObj(arg) 		{ return arg && (typeof arg === 'object'); }
@@ -37,10 +38,21 @@ function and()				{ return first( arguments, not ) === -1 }
 function id(val) 			{ return val; }
 function valFn(val) 		{  return function() { return val; } }
 function makeFn(arg, alt) 	{ return isFn(arg) ? arg : (alt || valFn(arg)); }
-function callwArg(arg, fn)	{ return fn(arg); }
-function call(fn) 			{ return fn(); }
 function propGetter(prop) 	{ return function(o) { return o[prop]; } }
 function objGetter(obj) 	{ return function(prop) { return obj[prop]; } }
+function callw() 			{ 
+	var bargs = slice.call(arguments);
+	return function( fn ) {
+		return fn.apply( null, bargs );
+	}
+}
+function lbind(fn)			{ return bind.apply( fn, [null].concat(slice.call(arguments, 1)) ); }
+function rbind(fn)			{
+	var bargs = slice.call(arguments, 1);
+	return function() { 
+		return fn.apply(null, slice.call(arguments).concat(bargs));
+	} 
+}
 
 function each(iter, cb) {
 	for(var i = 0, l = iter.length; i < l; i++)
@@ -97,8 +109,8 @@ function pipe(fns, canContinue) {
 	}
 }
 
-function templateArr (fns, target) 		{ return map( fns, callwArg.bind( null, target ) ); }
-function templateObj( proto, target ) 	{ return mapObj( proto, callwArg( null, target ) ); }
+function templateArr (fns, target) 		{ return map( fns, callw(target) ); }
+function templateObj( proto, target ) 	{ return mapObj( proto, callw(target) ); }
 function getProp(path, obj) 			{ return pipe( map( path, propGetter ), isObj )(obj); }
 
 function filter(iter, test) {
@@ -172,7 +184,7 @@ Event.prototype.off = function(slot) {
 };
 
 Event.prototype.emit = function (data) { 
-	each( this.slots, callwArg.bind( null, data ) ) 
+	each( this.slots, callw( data ) ) 
 };
 
 function signal() {
@@ -230,7 +242,7 @@ function collect( sources, cb ) {
 	res.deactivate = each.bind( null, res.sources, disconnect );
 	return res;
 	
-	function values() { return map( res.sources, call ); }
+	function values() { return map( res.sources, callw() ); }
 	function handler( src, idx ) {
 		return function ( val ) { cb( values(), src, idx ); }
 	}
