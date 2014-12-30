@@ -1,6 +1,6 @@
 (function() {
 
-var ss = window.ss, _ = window.ss.fn;
+var ss = window.ss, _ = window.ss_;
 window.$$ = sigel;
 ss.domSig= domSig;
 ss.domSlot = domSlot;
@@ -55,14 +55,14 @@ function domSig( sigName, event, getter, target, init ) {
 	var sel = sigel(target), sigkey = sigName+event;
 	var sig = sel.signals[sigkey];
 	if( !sig ) {
-		var events = Array.isArray(event) ? event : event.trim().split(/\s+/g);
+		var events = _.isArray(event) ? event : event.trim().split(/\s+/g);
 		sig = ss.signal();
 		_.each(events, function(ev) {
 			target.addEventListener( ev, sig.$$emit.bind(sig) ); 
 		});
 		sel.signals[sigkey] = sig;
 	}
-	var fn = _.template( getter || _.id, target );
+	var fn = _.fapply( getter || _.id );
 	return init ? sig.map( fn ) : ss.def( init, [sig, fn] );
 }
 
@@ -77,7 +77,7 @@ function domLiveSig( sigName, delegate, selector, event, getter ) {
 		});
 		delegate.signals[sigkey] = sig;
 	}
-	var fn = _.template( getter, delegate.el );
+	var fn = _.fapply( getter );
 	return sig.map( fn );
 }
 
@@ -86,7 +86,7 @@ function domSlot( slotName, setter, target, src ) {
 	var sel = sigel(target);
 	var ssl = sel.slots[slotName];
 	if( !ssl ) {
-		setter = _.isStr(setter) ? setProp.bind( target, setter ) : _.makeFn( setter ).bind( target );
+		setter = _.isStr(setter) ? setProp.bind( target, setter ) : _.fn( setter ).bind( target );
 		ssl = sel.slots[slotName] = ss.slot( setter );
 	}
 	ssl(src);
@@ -120,7 +120,7 @@ _.each(	[	['val'		,'input'	,'value'],
 	function( opt ) {
 		var sig = opt[0], defEv = opt[1], prop = opt[2];
 		Sigel.prototype[opt[0]] = function( ev ) {
-			return domSig( sig, ev || defEv, '#.'+prop, this.el, this.el[prop] );  
+			return domSig( sig, ev || defEv, '.'+prop, this.el, this.el[prop] );  
 		} 
 	});
 		
