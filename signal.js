@@ -1,7 +1,7 @@
 (function() {
 
 var _ = window.ss_;
-window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine, or: or, and: and, map: smap, def: def, slot: slot, if: iif,
+window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine, or: or, and: and, map: smap, def: def, slot: slot, if: iif, switch: sswitch,
 				lift: lift, reduce: sreduce, cycle: cycle, array: array, fsm: fsm,
 				timer: timer, seconds: seconds, clock: clock, assign: assign, printGraph: printGraph 
 			}
@@ -78,7 +78,7 @@ function signal() {
 
 function collect( sources, cb ) {
 	var res = {};
-	res.sources = _.map( sources, function( s ) { return isSig( s ) ? s : signal(s); });
+	res.sources = _.map( sources, msig);
 	res.startValues = values();
 	res.handlers = _.map( res.sources, handler );
 	res.log = '[' + _.map( res.sources, function(s) { return s.$$log }).join(', ') + ']';	
@@ -91,6 +91,7 @@ function collect( sources, cb ) {
 		return function ( val ) { cb( values(), src, idx ); }
 	}
 	
+	function msig( s ) { return isSig( s ) ? s : signal(s); }
 	function connect(src, idx) 		{ src.on( res.handlers[idx] ); }
 	function disconnect(src, idx) 	{ src.off( res.handlers[idx] ); }
 }
@@ -112,6 +113,24 @@ function combine( sources, fn ) {
 			sig.$$emit( retv );
 	}
 }
+
+function sswitch( startSig, event ) {
+	startSig = isSig(startSig) ? startSig : signal(startSig);
+	var emitter = new signal( startSig() );
+	var curSrc = setSig( startSig );
+	event.on( setSig );
+	return emitter;
+	
+	function setSig(newSig) {
+		var start = !curSrc;
+		curSrc && curSrc.deactivate();
+		curSrc = smap( newSig, emitter.$$emit.bind(emitter) );
+		!start && emitter.$$emit( newSig() );
+		return curSrc;
+	}
+	
+}
+
 
 function combineObj( obj ) {
 	var args = [], keys = Object.keys(obj);

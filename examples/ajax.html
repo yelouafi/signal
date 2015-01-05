@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+
+<style>
+	
+</style>
+
+</head>
+<body>
+
+<div>
+	Search
+	<p>
+		Search <input type="text" id="search">
+	</p>
+	<ul id="results"></ul>
+</div>
+
+<script src="../score.js"></script>
+<script src="../signal.js"></script>
+<script src="../signal.dom.js"></script>
+<script src="../signal.ajax.js"></script>
+<script>
+	var _ = ss_;
+	
+	function serverData( filter ) {
+        return ss.ajaxSig({ method: 'GET', url: './data.json' }).map(function(xhr) {
+            return matchings( filter, JSON.parse( xhr.responseText ) );    
+        }).log('ajax');
+    }
+	
+	function matchings( filter, data) {
+        filter = filter.toUpperCase();
+		return filter ? _.filter( data, test ).slice(0,10) : [];
+		function test(txt) { return txt && txt.toUpperCase().indexOf(filter) >= 0; }
+	}
+	
+	var results = ss.switch( [], $$('search').val().map( serverData ) );
+	
+	$$('results').html( results.map( function(arr){
+		return _.map( arr, function(e) { return '<li>'+ e +'</li>' } ).join('');
+	} ) );
+
+</script>
+</body>
+</html>

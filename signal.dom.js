@@ -63,7 +63,7 @@ function domSig( sigName, event, getter, target, init ) {
 		sel.signals[sigkey] = sig;
 	}
 	var fn = _.fapply( getter || _.id );
-	return init ? sig.map( fn ) : ss.def( init, [sig, fn] );
+	return arguments.length > 4 ? ss.def( init, [sig, fn] ) : sig.map( fn );
 }
 
 function domLiveSig( sigName, delegate, selector, event, getter ) {
@@ -98,7 +98,7 @@ function domSlot( slotName, setter, target, src ) {
 }
 
 _.each(	['click', 'dblclick', 'mousedown', 'mouseup', 'mouseover', 'mousemove', 'mouseout', 'dragstart', 'drag', 'dragenter', 
-		'dragleave', 'dragover', 'drop', 'dragend', 'keydown', 'keypress', 'keyup', 'select', 'change', 'submit', 'reset', 'focus', 'blur'], 
+		'dragleave', 'dragover', 'drop', 'dragend', 'keydown', 'keypress', 'keyup', 'select', 'input', 'change', 'submit', 'reset', 'focus', 'blur'], 
 	function(ev) {  
 		Sigel.prototype[ev] = function (getter) { 
 			return domSig( ev, ev, getter, this.el ); 
@@ -120,7 +120,7 @@ _.each(	[	['val'		,'input'	,'value'],
 	function( opt ) {
 		var sig = opt[0], defEv = opt[1], prop = opt[2];
 		Sigel.prototype[opt[0]] = function( ev ) {
-			return domSig( sig, ev || defEv, '.'+prop, this.el, this.el[prop] );  
+			return domSig( sig, ev || defEv, '.target.'+prop, this.el, this.el[prop] );  
 		} 
 	});
 		
