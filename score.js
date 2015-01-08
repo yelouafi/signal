@@ -46,6 +46,16 @@ _.bindr	= function(fn) {
 }
 
 _.head = function(arr) { return arr[arr.length-1] };
+_.pop = function(arr) { return arr.pop(); };
+_.add = function(arr, el, noDup) {
+	if( !noDup || arr.indexOf(el) < 0 )
+		return arr.push(el);
+}
+_.remove = function(arr, el) {
+	var idx = arr.indexOf(el);
+	if( idx >= 0)
+		return arr.splice(idx, 1);
+}
 _.each = function(iter, cb, exit) {
 	exit = _.fn( exit, _.falsy );
 	for(var i = 0, l = iter.length; i < l; i++) {
