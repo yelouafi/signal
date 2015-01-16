@@ -14,15 +14,8 @@ function Event() {
 	this.slots = []; 
 }
 
-Event.prototype.on = function(slot) {
-	if( this.slots.indexOf(slot) < 0 )
-		this.slots.push(slot);
-};
-
-Event.prototype.off = function(slot) {
-	var idx = this.slots.indexOf(slot);
-	if( idx >= 0)
-		this.slots.splice(idx, 1);
+Event.prototype.on 	= function(slot) { _.add(this.slots, slot, true); };
+Event.prototype.off 	= function(slot) { _.remove(this.slots, slot); };
 };
 
 Event.prototype.emit = function (data) { 
