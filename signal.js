@@ -1,7 +1,8 @@
 (function() {
 
 var _ = window.ss_;
-window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine, or: or, and: and, map: smap, def: def, slot: slot, if: iif, switch: sswitch,
+window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine, or: or, and: and, 
+				keep: keep, map: smap, def: def, slot: slot, if: iif, switch: sswitch, join: join,
 				lift: lift, reduce: sreduce, cycle: cycle, array: array, fsm: fsm,
 				timer: timer, seconds: seconds, clock: clock, assign: assign, printGraph: printGraph 
 			}
@@ -16,11 +17,24 @@ function Event() {
 
 Event.prototype.on 	= function(slot) { _.add(this.slots, slot, true); };
 Event.prototype.off 	= function(slot) { _.remove(this.slots, slot); };
-};
-
 Event.prototype.emit = function (data) { 
 	_.each( this.slots, _.callw( data ) ) 
 };
+
+function Stream(sig) {
+	if( !(this instanceof Stream) ) return new Stream(sig);
+	this.sig = sig;
+	this.sample = sig() !== neant;
+	this.arr = this.sample || [];
+}
+Stream.prototype.push = function() {
+	var v = this.sig();
+	if(!this.sample && v !== neant) this.arr.push(v);
+};
+Stream.prototype.canPick = function() { 
+	return this.sample || this.arr.length; 
+};
+Stream.prototype.pick = function() { return this.sample ? this.sig() : this.arr.shift() }
 
 function signal() {
 	var startValue = arguments.length ? arguments[0] : neant,
@@ -105,6 +119,34 @@ function combine( sources, fn ) {
 		if( retv !== neant )
 			sig.$$emit( retv );
 	}
+}
+
+function keep(sig) {
+	var start = sig();
+	return sreduce( sig, 
+		start !== neant ? [start] : [], 
+		function(arr, v) { 
+			arr.push(v); 
+			return arr; 
+		}
+	);
+}
+
+function join(sources) {
+	var streams = _.map(sources, Stream);
+	return combine( sources, handle );
+	
+	function handle( values, src, idx ) {
+		_.each(streams, function(s) { 
+			s.push(); 
+		} );
+		if( _.all(streams, canPick) )
+			return _.map(streams, pick);
+		return neant;
+	}
+	
+	function canPick(str) { return str.canPick(); }
+	function pick(str) { return str.pick(); }
 }
 
 function sswitch( startSig, event ) {

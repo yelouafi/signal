@@ -45,7 +45,9 @@ _.bindr	= function(fn) {
 	} 
 }
 
-_.head = function(arr) { return arr[arr.length-1] };
+_.empty = function(arr) { return arr.length === 0; };
+_.head = function(arr) { return arr[0] };
+_.tail = function(arr) { return arr.slice(1); }
 _.pop = function(arr) { return arr.pop(); };
 _.add = function(arr, el, noDup) {
 	if( !noDup || arr.indexOf(el) < 0 )
@@ -70,6 +72,12 @@ _.any = function(iter, test) {
 		if ( test(iter[i]) ) return true;
 	return false;
 }
+_.all = function(iter, test) { 
+	test = _.fn( test, _.eq(test) );
+	for(var i = 0, l = iter.length; i < l; i++)
+		if ( !test(iter[i]) ) return false;
+	return true;
+};
 _.first = function(iter, test) {
 	test = _.fn( test, _.eq(test) );
 	for(var i = 0, l = iter.length; i < l; i++)
@@ -161,7 +169,7 @@ _.fapply = function( config, args /*...*/ ) {
 				return fprop;
 			else 
 				return function(v) {
-					args = map( args, function(v) { return _.isFn(v) ? v() : v; } )
+					args = _.map( args, function(v) { return _.isFn(v) ? v() : v; } )
 					return fprop.apply( v, args );
 				} 
 		} else
