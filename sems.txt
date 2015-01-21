@@ -17,10 +17,7 @@ Value
 	V = V || NA
 	
 Time
-	T : [t0, t1, ...., tn]
-
-Event
-	E: [(T,PV)]
+	T : {0,1,2,...}
 
 Signal
 	S: T -> V
@@ -42,14 +39,14 @@ there are 2 types of operations:
 1- Stream operators
 ---------------------
 
-or: [E] -> E
-or( [Ei] ) = Union [Ei]
+or: [S] -> T -> V
+or( [s], t ) = first ( si != NA )(t) || NA
 
-and: [E] -> E
-and( [Ei] ) = Intersect [Ei]
+and: [S] -> T -> V
+and( [s] ) = all( [si != NA ) => [si] || NA
 
-filter: F -> [E] -> E
-filter (f, [Ei] ) = [ e where e € or([Ei]) && f(e(v) ) = true ]
+filter: F -> [S] -> T -> V
+filter (f, [s], t ) = f( [s(t)] ) => [s(t)] || NA 
 
 2- Signal functions
 --------------------
@@ -62,13 +59,10 @@ map: F -> [S] -> T -> V
 map (f, [s], t) = all([s(t)]) != NA  && f([s(t)])  || NA
 
 switch: S -> T -> V
-switch(e, t) = e(t)(t)
+switch(s, t) = s(t)(t)
 
-scan: F -> V -> S -> T -> V
-scan (f, v, s, t) = s(t) == NA => v
-			else   => f(v, s(t))
+scan: F -> PV -> S -> T -> PV
+scan (f, v, s, t) = s(t) == NA => v || f(v, s(t))
 			
 join: [S] -> T -> V
-join ([s], t) = [ki] if [ki] != NA else NA
-		  where
-		     ki = keep(si, t)
+join ([s], t) = [keep(si, t)] if [ki] != NA else NA
