@@ -19,6 +19,9 @@ Value
 Time
 	T : [t0, t1, ...., tn]
 
+Event
+	E: [(T,PV)]
+
 Signal
 	S: T -> V
 	a value that varies over time
@@ -40,35 +43,32 @@ there are 2 types of operations:
 ---------------------
 
 or: [E] -> E
-or( E0, E1, ..., En ) = E0 | E1 | ... | En
+or( [Ei] ) = Union [Ei]
 
 and: [E] -> E
-and( E0, E1, ..., En ) = E0 && E1 && ... && En
+and( [Ei] ) = Intersect [Ei]
 
 filter: F -> [E] -> E
-filter (f, E1, ..., En) = [ e where e € or(E1,...,En) && f(e) = true ]
+filter (f, [Ei] ) = [ e where e € or([Ei]) && f(e(v) ) = true ]
 
 2- Signal functions
 --------------------
 
-map: F -> [S] -> S
-map f, [s], t = f( all( [s(t)] != NA ) )
-				otherwise NA
-	
-filter
-	filter: F -> S -> S
-	filter f s t = map { f( s(t) ) ? s(t) : NA }  s t
-	
-reduce
-	reduce: PV -> F -> S -> S
-	reduce pv f s t =	if s(t) == NA -> pv
-						else f( pv, s(t) )
-	
-def
-	def: V -> [( S, F )] -> S
-	def v [(s,f)] t =	fst( [f(s(t))] != NA )
-						otherwise v
+keep: S -> T -> V
+keep(s, t) = s(t) != NA => s(t)
+		else    => s(t-1)
 
-	
+map: F -> [S] -> T -> V
+map (f, [s], t) = all([s(t)]) != NA  && f([s(t)])  || NA
 
-	
+switch: S -> T -> V
+switch(e, t) = e(t)(t)
+
+scan: F -> V -> S -> T -> V
+scan (f, v, s, t) = s(t) == NA => v
+			else   => f(v, s(t))
+			
+join: [S] -> T -> V
+join ([s], t) = [ki] if [ki] != NA else NA
+		  where
+		     ki = keep(si, t)
