@@ -56,16 +56,16 @@
 <script src="../signal.dom.js"></script>
 <script>
 	
-	function isDigit(c) { return /\d/.test(c); }
-	function isOp(c) { return '+-*/'.indexOf(c) >= 0; }
-	function calc(st) {
-		return eval(st.join(''));
-	}
-	function fmt(s) { return s.join(' '); }
+	var calc = function (st) { return eval(st.join('')); };
+	
+	var isDigit = function (c) { return /\d/.test(c); }.$filter();
+	var isOp = function (c) { return '+-*/'.indexOf(c) >= 0; }.$filter();
+	var fmt = function (s) { return s.join(' '); }.$lift();
+	
 	
 	var cmd = ss.or( $$('buttons').$click('td', '.target.textContent'), $document.keyChar());
-	var op = cmd.filter( isOp ),
-		digit = cmd.filter( isDigit ),
+	var op = isOp(cmd),
+		digit =isDigit(cmd),
 		eq = ss.or( cmd.filter('='), $document.keyCode(13) );
 	
 	var stream = ss.fsm( ['dig', [0]],
@@ -81,7 +81,7 @@
 		}]
 	
 	);
-	$$('output').text( stream.map( fmt ) );
+	$$('output').text( fmt(stream) );
 
 </script>
 </body>

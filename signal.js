@@ -145,7 +145,6 @@ function combineObj( obj ) {
 
 function slot( tapFn ) {
 	var curSrc;
-    
 	return function( newSig ) {
 		curSrc && curSrc.deactivate();
 		curSrc = smap( newSig, tapFn );
@@ -247,16 +246,15 @@ function fsm( state, transitions /*, ... */ ) {
 	}
 }
 
-function lift( arg ) {
-    return _.isFn(arg) ? liftFn(arg) : ( _.isObj(arg) ? _.mapObj( arg, lift ) : arg );
-    
-	function liftFn(fn) {
-        return function() {
-            return smap( [].concat( _.slice( arguments ), fn ) );    
-        }		
-	}
+function lift( fn ) {
+	return function() {
+		return smap( [].concat( _.slice( arguments ), fn ) );    
+	};
 }
-Function.prototype.$lift = function() { return lift(this); };
+Function.prototype.$lift = function() { 
+	var fn = this;
+	return lift(this); 
+};
 
 function sfilter( source, test ) {
 	test = _.fn( test, _.eq(test) );
@@ -264,6 +262,10 @@ function sfilter( source, test ) {
 		[source, function(v) { return test(v) ? v : neant; }]
 	);
 }
+Function.prototype.$filter = function() {
+	var fn = this;
+	return function(sig) { return sfilter(sig, fn); };
+};
 
 function sreduce( source, startValue, fn ) {
 	return def( startValue,
