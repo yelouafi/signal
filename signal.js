@@ -34,7 +34,9 @@ Stream.prototype.push = function() {
 Stream.prototype.canPick = function() { 
 	return this.sample || this.arr.length; 
 };
-Stream.prototype.pick = function() { return this.sample ? this.sig() : this.arr.shift() }
+Stream.prototype.pick = function() { 
+	return this.sample ? this.sig() : this.arr.shift();
+}
 
 function signal() {
 	var startValue = arguments.length ? arguments[0] : neant,
@@ -104,7 +106,7 @@ function collect( sources, cb ) {
 }
 
 function combine( sources, fn ) {
-	sources = _.map( sources, function( s ) { return _.isObj( s ) ? combineObj( s ) : s; });
+	sources = _.map( sources, function(s) { return _.isObj(s) ? combineObj(s) : ( _.isArray(s) ? combineArr(s) : s); });
 	var collection = collect( sources, handle );
 	var sig = signal( fn( collection.startValues, null, -1 ) );
 	sig.$$sources = collection.sources;
@@ -121,15 +123,54 @@ function combine( sources, fn ) {
 	}
 }
 
-function keep(sig) {
+function combineArr( arr ) {
+	return combine( arr, _.id );
+}
+
+function combineObj( obj ) {
+	var args = [], keys = Object.keys(obj);
+	_.each( keys, function( key ) { args.push( obj[key] ); });
+	return combine( args, handle );
+	
+	function handle( values, src, idx ) {
+		var res = {};
+		_.each( keys, function( key, idx ) {
+			var vk = values[idx];
+			if( vk !== neant )
+				res[key] = vk;
+		});
+		return res;
+	}
+}
+
+function slot( tapFn ) {
+	var curSrc;
+    
+	return function( newSig ) {
+		curSrc && curSrc.deactivate();
+		curSrc = smap( newSig, tapFn );
+		return curSrc;
+	}
+}
+
+function sswitch( startSig, event ) {
+    startSig = isSig(startSig) ? startSig : signal(startSig);
+    var emitter = new signal( startSig() ),
+		curSrc = setSig( startSig );
+    event.on(setSig);
+    return emitter;
+    
+    function setSig( newSig ) {
+		var start = !curSrc;
+		curSrc && curSrc.deactivate();
+		curSrc = smap( newSig, emitter.$$emit.bind(emitter) );
+		!start && emitter.$$emit( newSig() );
+	}
+}
+
+function keep( sig ) {
 	var start = sig();
-	return sreduce( sig, 
-		start !== neant ? [start] : [], 
-		function(arr, v) { 
-			arr.push(v); 
-			return arr; 
-		}
-	);
+    return start !== neant ? sig : def( start, [ sig, _.id ] );
 }
 
 function join(sources) {
@@ -147,50 +188,6 @@ function join(sources) {
 	
 	function canPick(str) { return str.canPick(); }
 	function pick(str) { return str.pick(); }
-}
-
-function sswitch( startSig, event ) {
-	startSig = isSig(startSig) ? startSig : signal(startSig);
-	var emitter = new signal( startSig() );
-	var curSrc = setSig( startSig );
-	event.on( setSig );
-	return emitter;
-	
-	function setSig(newSig) {
-		var start = !curSrc;
-		curSrc && curSrc.deactivate();
-		curSrc = smap( newSig, emitter.$$emit.bind(emitter) );
-		!start && emitter.$$emit( newSig() );
-		return curSrc;
-	}
-	
-}
-
-
-function combineObj( obj ) {
-	var args = [], keys = Object.keys(obj);
-	_.eachKey( keys, function( key ) { args.push( obj[key] ); });
-	return combine( args, handle );
-	
-	function handle( values, src, idx ) {
-		var res = {};
-		_.each( keys, function( key, idx ) {
-			var vk = values[idx];
-			if( vk !== neant )
-				res[key] = vk;
-		});
-		return res;
-	}
-}
-
-
-function slot( fn ) {
-	var src = null;
-	return function slotFn( s ) {
-		src && src.deactivate();
-		src = smap( s, function(v) { fn(v); } );
-		return s;
-	}
 }
 
 function or() {
@@ -250,11 +247,16 @@ function fsm( state, transitions /*, ... */ ) {
 	}
 }
 
-function lift( fn ) {
-	return function() {
-		return smap( [].concat( _.slice( arguments ), fn ) );
+function lift( arg ) {
+    return _.isFn(arg) ? liftFn(arg) : ( _.isObj(arg) ? _.mapObj( arg, lift ) : arg );
+    
+	function liftFn(fn) {
+        return function() {
+            return smap( [].concat( _.slice( arguments ), fn ) );    
+        }		
 	}
 }
+Function.prototype.$lift = function() { return lift(this); };
 
 function sfilter( source, test ) {
 	test = _.fn( test, _.eq(test) );

@@ -59,27 +59,14 @@
 	function isDigit(c) { return /\d/.test(c); }
 	function isOp(c) { return '+-*/'.indexOf(c) >= 0; }
 	function calc(st) {
-		var opmap = {
-			'+': function(a, b) { return a+b },
-			'-': function(a, b) { return a-b },
-			'*': function(a, b) { return a*b },
-			'/': function(a, b) { return a/b }
-		}
-		var res = st[0];
-		for(var i=1; i<st.length; i+=2) {
-			var n = st[i+1], op = st[i];
-			if( n !== undefined ) {
-				res = opmap[op](res, +n);
-			}
-		}
-		return res;
+		return eval(st.join(''));
 	}
 	function fmt(s) { return s.join(' '); }
 	
 	var cmd = ss.or( $$('buttons').$click('td', '.target.textContent'), $document.keyChar());
 	var op = cmd.filter( isOp ),
 		digit = cmd.filter( isDigit ),
-		eq = cmd.filter('=');
+		eq = ss.or( cmd.filter('='), $document.keyCode(13) );
 	
 	var stream = ss.fsm( ['dig', [0]],
 		[eq, 			function( p ) { return [ 'digEq', [ calc(p) ] ] } ],

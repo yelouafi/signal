@@ -18,7 +18,7 @@
 <script src="../signal.js"></script>
 <script src="../signal.dom.js"></script>
 <script>
-
+    
 ss	.or( $$('up').click(1), $$('down').click(-1) )
 	.reduce(0, function (prev, cur) { return prev + cur })
 	.$to('#count')

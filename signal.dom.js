@@ -113,6 +113,9 @@ Sigel.prototype.keyChar = function (getter) {
 		function(e) { return String.fromCharCode(e.keyCode)}, 
 		this.el ); 
 };
+Sigel.prototype.keyCode = function (code) { 
+	return domSig( 'keyCode', 'keypress', '.keyCode', this.el ).filter(code); 
+};
 
 _.each(	[	['val'		,'input'	,'value'], 
 			['checked'	,'change'	,'checked']

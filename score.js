@@ -46,7 +46,7 @@ _.bindr	= function(fn) {
 }
 
 _.empty = function(arr) { return arr.length === 0; };
-_.head = function(arr) { return arr[0] };
+_.head = function(arr) { return arr[arr.length-1] };
 _.tail = function(arr) { return arr.slice(1); }
 _.pop = function(arr) { return arr.pop(); };
 _.add = function(arr, el, noDup) {
@@ -163,14 +163,14 @@ _.fapply = function( config, args /*...*/ ) {
 		if( _.isStr(val) && ( (prefix = val[0]) === '.' ) ) {
 			var path = _.slice( val.split('.'), 1 ),
 				head = _.head(path),
-				hasMethod = head.indexOf('()') === (head.length - 2),
+				hasMethod = head.length > 2 && head.indexOf('()') === (head.length - 2),
 				fprop = _.bindl( _.getProp, path );
 			if(!hasMethod) 
 				return fprop;
 			else 
 				return function(v) {
 					args = _.map( args, function(v) { return _.isFn(v) ? v() : v; } )
-					return fprop.apply( v, args );
+					return fprop.apply( null, v, args );
 				} 
 		} else
 			return _.fn(val);
