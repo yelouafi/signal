@@ -1,8 +1,8 @@
 (function() {
 
 var _ = window.ss_;
-window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine, or: or, and: and, 
-				keep: keep, map: smap, def: def, slot: slot, if: iif, switch: sswitch, join: join,
+window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine, or: or, and: and, never: never,
+				keep: keep, map: smap, def: def, slot: slot, if: iif, switch: sswitch, join: join, flatMap: flatMap,
 				lift: lift, reduce: sreduce, cycle: cycle, array: array, fsm: fsm,
 				timer: timer, seconds: seconds, clock: clock, assign: assign, printGraph: printGraph 
 			}
@@ -10,6 +10,7 @@ window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine,
 var neant = new function Neant() {}
 function isSig(arg) { return arg && arg.$$sig; };
 function occ(sig) { return sig.occ; };
+function never() { return signal(); }
 
 function Event() { 
 	this.slots = []; 
@@ -167,6 +168,20 @@ function sswitch( startSig, event ) {
 	}
 }
 
+function flatMap( event ) {
+    var emitter = new signal(),
+		sigList = [],
+		curSrc = null;
+    event.on(addSig);
+    return emitter;
+    
+    function addSig( newSig ) {
+		sigList.push(newSig);
+		curSrc && curSrc.deactivate();
+		curSrc = smap( ss.or( sigList ), emitter.$$emit.bind(emitter) );
+	}
+}
+
 function keep( sig ) {
 	var start = sig();
     return start !== neant ? sig : def( start, [ sig, _.id ] );
@@ -251,10 +266,6 @@ function lift( fn ) {
 		return smap( [].concat( _.slice( arguments ), fn ) );    
 	};
 }
-Function.prototype.$lift = function() { 
-	var fn = this;
-	return lift(this); 
-};
 
 function sfilter( source, test ) {
 	test = _.fn( test, _.eq(test) );
@@ -262,10 +273,6 @@ function sfilter( source, test ) {
 		[source, function(v) { return test(v) ? v : neant; }]
 	);
 }
-Function.prototype.$filter = function() {
-	var fn = this;
-	return function(sig) { return sfilter(sig, fn); };
-};
 
 function sreduce( source, startValue, fn ) {
 	return def( startValue,
@@ -282,6 +289,7 @@ function cycle(source, first, second) {
 
 function array( arr, add, remove ) {
 	arr = arr || [];
+	var changes = {};
 	var len = function() { return arr.length };
 	var res = def( arr,
 		[add, 		function(v) { arr.push(v); return arr; }],
@@ -291,8 +299,7 @@ function array( arr, add, remove ) {
 			return arr;
 		}]
 	);
-	
-	res.len = res.reduce( len, len() );
+	res.len = res.reduce( len(), len );
 	return res;
 }
 

@@ -58,14 +58,14 @@
 	
 	var calc = function (st) { return eval(st.join('')); };
 	
-	var isDigit = function (c) { return /\d/.test(c); }.$filter();
-	var isOp = function (c) { return '+-*/'.indexOf(c) >= 0; }.$filter();
-	var fmt = function (s) { return s.join(' '); }.$lift();
+	var isDigit = function (c) { return /\d/.test(c); };
+	var isOp = function (c) { return '+-*/'.indexOf(c) >= 0; };
+	var fmt = ss.lift(function (s) { return s.join(' '); });
 	
 	
 	var cmd = ss.or( $$('buttons').$click('td', '.target.textContent'), $document.keyChar());
-	var op = isOp(cmd),
-		digit =isDigit(cmd),
+	var op = cmd.filter(isOp),
+		digit = cmd.filter(isDigit),
 		eq = ss.or( cmd.filter('='), $document.keyCode(13) );
 	
 	var stream = ss.fsm( ['dig', [0]],

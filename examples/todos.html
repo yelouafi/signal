@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+</head>
+<body>
+<h1>Simple Todos App</h1>
+<div>
+    <p>
+        <input type="text" id="todoText">
+        <button id="addTodo">Add</button>
+    </p>
+    <p>Todo List</p>
+    <ul id="todoList">
+        <li>Todo here ...</li>
+    </ul>
+</div>
+
+<script src="../score.js"></script>
+<script src="../signal.js"></script>
+<script src="../signal.dom.js"></script>
+<script>
+
+var todoText = function() {
+	return document.getElementById('todoText').value;
+}
+
+var todoTemplate = function(text) {
+    return '<li data-id="' + text + '">' + text + ' <button class="remove">X</button></li>';
+}
+
+var todoList = $$('todoList');
+var addTodo = $$('addTodo').click( todoText ).map( todoTemplate ).map( todoList.append );
+var removeTodo = $$("todoList").$click('.remove', '.target.parentElement').map( todoList.remove );
+
+
+
+</script>
+</body>
+</html>

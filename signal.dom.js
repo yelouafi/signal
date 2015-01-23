@@ -28,6 +28,14 @@ function delegate( root ) {
 		});
 	};
 }
+
+function nodeFromString(html, args) {
+    var tmp = document.createElement('body');
+    tmp.innerHTML = html;
+    var node = tmp.removeChild( tmp.firstChild );
+    tmp = null;
+	return node;
+}
 	
 function Sigel(el) {
 	this.el = el;
@@ -41,7 +49,7 @@ var sigelCache = window.$sigcache = {}, uuid = 0;
 window.$document = new Sigel(document);
 function sigel(el) {
 	if(el === document) return window.$document;
-	el = el instanceof Element ? el : document.getElementById(el);
+	el = el instanceof Element ? el : ( el.indexOf('<') === 0 ? nodeFromString(el) : document.getElementById(el) );
 	var ret = sigelCache[el.dataset.segid];
 	if( !ret ) {
 		el.dataset.segid = ++uuid;
@@ -130,6 +138,7 @@ _.each(	[	['val'		,'input'	,'value'],
 _.each(	[	['text'		,'textContent'],
 			['html'		,'innerHTML'],
 			['append'	,'appendChild'],
+			['remove'	,'removeChild'],
 			['visible'	,setVisible],
 			['css'		,setCss],
 			['style'	,setStyle],
