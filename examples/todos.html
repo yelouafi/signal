@@ -25,12 +25,13 @@ var todoText = function() {
 }
 
 var todoTemplate = function(text) {
-    return '<li data-id="' + text + '">' + text + ' <button class="remove">X</button></li>';
+	
+    return $t('li.todo[]'  '<li data-id="@0">@0<button class="remove">X</button></li>';
 }
 
 var todoList = $$('todoList');
 var addTodo = $$('addTodo').click( todoText ).map( todoTemplate ).map( todoList.append );
-var removeTodo = $$("todoList").$click('.remove', '.target.parentElement').map( todoList.remove );
+
 
 
 
