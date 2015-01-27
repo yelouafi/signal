@@ -120,6 +120,26 @@ _.mapObj = function(obj, cb) {
 	});
 	return res;
 }
+_.filterObj = function(obj, cb) {
+	cb = _.fn(cb);
+	var res = {};
+	_.eachKey( obj, function( val, key ) {
+		if( _.isObj( val ) ) {
+			res[key] = _.filterObj( val, cb );
+		} else if( cb( val, key ) )
+			res[key] = val;
+	});
+	return res;
+}
+_.merge = function() {
+	var res = {};
+	_.each( arguments, function(obj) {
+		_.eachKey(obj, function(key) {
+			res[key] = obj[key];
+		})
+	} );
+	return res;
+}
 
 _.pipe = function(fns, canContinue) {
 	canContinue = canContinue || _.truthy;

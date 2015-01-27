@@ -1,6 +1,13 @@
 <!doctype html>
 <html>
 <head>
+	<style>
+		.done {
+		  text-decoration: line-through;
+		  color: grey;
+		}
+	</style>
+
 </head>
 <body>
 <h1>Simple Todos App</h1>
@@ -25,11 +32,20 @@ var todoText = function() {
 }
 
 var todoTemplate = function(text) {
-	
-    return $t('li.todo[]'  '<li data-id="@0">@0<button class="remove">X</button></li>';
+    return $$.t('li.todo', 
+		$$.t('input.check[type=checkbox]')
+		text, 
+		$$.t('button.remove', 'X')
+	);
 }
 
-var todoList = $$('todoList');
+var todoList = $$('todoList', {
+	'<li.todo': function(li) {
+		return { 
+			css: { done: li.$('.check') } 
+		};
+	}
+});
 var addTodo = $$('addTodo').click( todoText ).map( todoTemplate ).map( todoList.append );
 
 
