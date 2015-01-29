@@ -2,6 +2,9 @@
 <html>
 <head>
 	<style>
+		[template] {
+			display: none !important;
+		}
 		.done {
 		  text-decoration: line-through;
 		  color: grey;
@@ -16,9 +19,16 @@
         <input type="text" id="todoText">
         <button id="addTodo">Add</button>
     </p>
-    <p>Todo List</p>
+    <p>
+    	Todo List
+    	<a href="#" ss-sort="click">sort</a>
+    </p>
     <ul id="todoList">
-        <li>Todo here ...</li>
+        <li template="tmap:">
+			<input type="checkbox" class="check" /> 
+			<span class="todoText">...</span>
+			<button class="remove" >Remove</button>
+		</li>
     </ul>
 </div>
 
@@ -27,26 +37,29 @@
 <script src="../signal.dom.js"></script>
 <script>
 
-var todoText = function() {
-	return document.getElementById('todoText').value;
-}
+var addTodo = $('#addTodo').click( todoText ),
+	removeTodo = $('#todoList').merge('todo.remove'),
+	sortTodos = removeTodo = $('#sort').click();
 
-var todoTemplate = function(text) {
-    return $$.t('li.todo', 
-		$$.t('input.check[type=checkbox]')
-		text, 
-		$$.t('button.remove', 'X')
-	);
-}
+var todosList = ss.reduce([],
+	[addTodo, function(arr, todo) { arr.push({ text: todo }); return arr; }],
+	[removeTodo, _.remove],
+	[sortTodos, _.bindr( _.sort, 'text' )]
+)
 
-var todoList = $$('todoList', {
-	'<li.todo': function(li) {
-		return { 
-			css: { done: li.$('.check') } 
-		};
-	}
+
+var todoTemplate = $.t('@todo', function(data, ch) {
+	return {
+		$remove: ch('.remove').click(data),
+		css: { done: ch('.check').checked() },
+		'.todoText': { text: data.text }
+	};
 });
-var addTodo = $$('addTodo').click( todoText ).map( todoTemplate ).map( todoList.append );
+
+$('#todoList', {
+	children: todoTemplate.tmap( todoList )
+});
+
 
 
 

@@ -134,11 +134,15 @@ _.filterObj = function(obj, cb) {
 _.merge = function() {
 	var res = {};
 	_.each( arguments, function(obj) {
-		_.eachKey(obj, function(key) {
-			res[key] = obj[key];
+		_.eachKey(obj, function(val, key) {
+			res[key] = val;
 		})
 	} );
 	return res;
+}
+_.sort = function(arr, comp) {
+	comp = _.fn(comp, function(p1, p2) { return p1[comp] < p2[comp] });
+	return arr.sort(comp);
 }
 
 _.pipe = function(fns, canContinue) {

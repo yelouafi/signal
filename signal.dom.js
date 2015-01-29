@@ -1,9 +1,11 @@
 (function() {
 
 var ss = window.ss, _ = window.ss_;
-ss.parse = parseHtml
-window.$$ = sigel;
-window.$$.t = template;
+window.$ = sigel;
+window.$.t = template;
+window.$.data = function(sel) {
+	return sel instanceof Sigel ? sel.data : null;
+}
 
 function delegate( root ) {
 	var eventRegistry = {};
@@ -106,7 +108,7 @@ function parseTag(str) {
 	}
 	function unquotedVal() {
 		var sidx = idx;
-		while( neof() && !/["'><\=`\s,]/.test(str[idx]) ) idx++;
+		while( neof() && !/["'><\=`\s,\]]/.test(str[idx]) ) idx++;
 		return str.slice(sidx, idx);
 	}
 	function attr() {
@@ -122,12 +124,6 @@ function parseTag(str) {
 	}
 }
 
-function template(html, body) {
-	var el = parseHtml(html);
-	el.children = _.isArray(body) ? body : _.slice(arguments, 1);
-	return el;
-}
-
 function buildHtml(el) {
 	if(! (el instanceof Tag) ) return document.createTextNode( String(el) );
     var tmp = document.createElement('body');
@@ -137,59 +133,103 @@ function buildHtml(el) {
 	return node;
 	
 	function buildHtml(el) {
-		return _.
-		'<' + el.tag + ' ' + (el.classes.length ? 'class="' + el.classes.join(' ') + '" ' : '')
-			+ _.map( Object.keys(el.attrs), function(k) {
+		var attrs = _.map( Object.keys(el.attrs), function(k) {
 				return k + ( el.attrs[k] ? '=' + el.attrs[k] : '' );
-			} ).join(' ')
-			+ ( el.$$void ? '/>' :  ('>' + 
-				_.map(el.children, function(ch) { return (ch instanceof Tag) ? buildHtml(ch) : ch; }).join(''); 
-				+ '</' + el.tag + '>'
-			) );
+			}).join(' ') + ' ',
+			classes = el.classes.length ? 'class="' + el.classes.join(' ') + '" ' : '',
+			children = _.map(el.children, function(ch) { return (ch instanceof Tag) ? buildHtml(ch) : ch; }).join('');
+		return '<' + el.tag + ' ' + classes + attrs + ( el.$$void ? '/>' :  ('>' + children + '</' + el.tag + '>') );
 	}
-}
-		
-function Sigel(el, config) {
-	var me = this;
-	config = config || {};
-	this.el = el;
-	this.$$signals = {};
-	this.$$slots = {};
-	this.$$configs = {};
-	this.$$on = delegate(this.el);
-	
-	_.eachKey(config, function(key, sig) {
-		if(key[0] !== '<') {
-			var slot = me.$$slots[slotName];
-			if(slot) {
-				slot(sig);
-			}
-		} else {
-			me.$$configs[key.slice(1)] = config[key];
-		}				
-	});
 }
 
-Sigel.prototype.$ = function(sel)  {
-	var el = this.el;
+var tpls = {}, docF = document.createDocumentFragment();
+function template(id, fnConf) {
+	var tel = tpls[id] || ( tpls[id] = ( id[0] === '@' ? pullTemplate(id) : buildHtml(id) ) );
+	fnConf = _.fn( fnConf );
+	create.tmap = _.bindl( templateColl, create );
+	return tel && create;
 	
-	
-	function search(el) {
-		var idx = _.first(el.childNodes, match);
-		if(idx < 0) {
-			var res;
-			_.each( el.childNodes, search, function(r) { res = r; return r;} );
-			return res;
-		} else
-			return el.childNodes[idx];
+	function create(data) {
+		var clone = tel.cloneNode(true);
+		docF.appendChild(clone);
+		var sc = sigel(clone, data),
+			find = sc.find.bind(sc, docF);
+		sc.config( fnConf.call(sc, data, find), find );
+		return sc;
 	}
-	function match(el) { return el.matches(sel); }
+	
+	function pullTemplate(id) {
+		var tel = document.getElementById(id.slice(1));
+		if(tel) {
+			tel.parentElement.removeChild(tel);
+			tel.removeAttribute('template');
+			tel.removeAttribute('id');
+			return (tpls[id] = tel);
+		}
+	}
+}
+
+function templateColl(fn, src) {
+	return src.map(sync);
+	
+	function sync(coll) {
+		return _.map( coll, function(obj) {
+			return obj.$$el || (obj.$$el = fn(obj));
+		});
+	}
+}
+
+var sigelCache = window.$sigcache = {}, uuid = 0;
+window.$document = new Sigel(document);
+function sigel(el, config) {
+	el = el instanceof Element ? el : document.querySelector(el);
+	var ret = sigelCache[el.dataset.segid];
+	if( !ret ) {
+		var sid = 'ss-'+(++uuid);
+		el.dataset.sid = sid;
+		el.classList.add(sid);
+		var sel = sigelCache[sid] =  new Sigel(el)
+		if(config) sel.config(config);
+		return sel;
+	}
+	return ret;
+}
+	
+function Sigel(el, data) {
+	var me = this;
+	this.el = el;
+	this.data = data;
+	this.baseSel =  (el === document) ? '' : el.tagName + '.' + el.dataset.sid + ' ';
+	this.$$signals = {};
+	this.$$children = [];
+	this.$$on = delegate(this.el);
+}
+
+Sigel.prototype.config = function(conf, find) {
+	var me = this;
+	find = find || this.find.bind(this);
+	_.eachKey( conf, function(sig, slot) {
+		if(me[slot])
+			me[slot](sig);
+		else if( _.isObj(sig) ) {
+			var ch = find(slot);
+			if(ch) {
+				ch.config(sig);
+			}
+		}
+	} );
+	return this;
+}
+
+Sigel.prototype.find = function(doc,selector) {
+	var el = arguments.length < 2 ? this.find(null, doc) : (doc || document).querySelector( this.baseSel + selector );
+	return el && sigel(el);
 }
 
 Sigel.prototype.signal = function ( selector/* opt */, event, getter ) {
 	var me = this;
-	if(arguments.length < 4) 
-		return this.signal(null, selector, event, getter);
+	if(arguments.length < 3) 
+		return this.signal(null, selector, event);
 	var sig = this.$$signals[event];
 	if( !sig ) {
 		var events = _.isArray(event) ? event : event.trim().split(/\s+/g);
@@ -202,14 +242,22 @@ Sigel.prototype.signal = function ( selector/* opt */, event, getter ) {
 	return sig.map( _.fapply( getter || _.id ) );
 }
 
-Sigel.prototype.prop = function(changeEvents, getter)  {
+Sigel.prototype.$prop = function(getter, events)  {
 	getter = _.bindl( _.fapply( getter || _.id ), this.el);
-	return ss.def( getter(), this.signal(null, changeEvents, getter) );
+	return ss.def( getter(), [this.signal(null, events, getter), _.id] );
 }
 
-Sigel.prototype.slot = function( slotName, setter, src ) {
+Sigel.prototype.get = function(getter)  {
+	return _.getProp( getter.split('.'), this.el );
+}
+
+Sigel.prototype.merge = function()  {
+	return _.getProp( getter.split('.'), this.el );
+}
+
+Sigel.prototype.slot = function( setter, src ) {
 	setter = _.isStr(setter) ? setProp.bind( this, setter ) : _.fn( setter ).bind( this );
-	var sl = this.$$slots[slotName] = ss.slot( setter );
+	var sl = ss.slot( setter );
 	sl(src);
 	return sl;
 	
@@ -218,35 +266,22 @@ Sigel.prototype.slot = function( slotName, setter, src ) {
 	}
 }
 
-var sigelCache = window.$sigcache = {}, uuid = 0;
-window.$document = new Sigel(document);
-function sigel(el, config) {
-	if(el === document) return window.$document;
-	el = el instanceof Element ? el : document.getElementById(el) );
-	var ret = sigelCache[el.dataset.segid];
-	if( !ret ) {
-		el.dataset.segid = ++uuid;
-		ret = sigelCache[uuid] =  new Sigel(el, config);
-	}
-	return ret;
-}
-
 
 _.each(	['click', 'dblclick', 'mousedown', 'mouseup', 'mouseover', 'mousemove', 'mouseout', 'dragstart', 'drag', 'dragenter', 
 		'dragleave', 'dragover', 'drop', 'dragend', 'keydown', 'keypress', 'keyup', 'select', 'input', 'change', 'submit', 'reset', 'focus', 'blur'], 
 	function(event) {  
-		Sigel.prototype[event] = function (getter) { 
+		Sigel.prototype['$'+event] = function (getter) { 
 			return this.signal( event, getter ); 
 		};
 	});
 
-Sigel.prototype.keyChar = function (ch) {
+Sigel.prototype.$keyChar = function (ch) {
 	var sig = this.signal( 'keypress', function(e) { 
 		return String.fromCharCode(e.keyCode)
 	});
 	return arguments.length ? sig.filter(ch) : sig;
 };
-Sigel.prototype.keyCode = function (code) { 
+Sigel.prototype.$keyCode = function (code) { 
 	var sig = this.signal( 'keypress', '.keyCode');
 	return arguments.length ? sig.filter(code) : sig;
 };
@@ -256,8 +291,8 @@ _.each(	[	['val'		,'change'	,'value'],
 		], 
 	function( opt ) {
 		var name = opt[0], defaultEvent = opt[1], prop = opt[2];
-		Sigel.prototype[name] = function( event ) {
-			return this.prop( event || defaultEvent, '.'+prop );  
+		Sigel.prototype['$'+name] = function( event ) {
+			return this.$prop( '.'+prop, event || defaultEvent );  
 		} 
 	});
 		
@@ -265,6 +300,7 @@ _.each(	[	['text'		,'textContent'],
 			['html'		,'innerHTML'],
 			['append'	,append],
 			['remove'	,remove],
+			['children'	,children],
 			['visible'	,setVisible],
 			['css'		,setCss],
 			['style'	,setStyle],
@@ -278,17 +314,20 @@ _.each(	[	['text'		,'textContent'],
 	});
 
 function append( child ) {
-	var me = this;
-	child = child instanceof Node ? child : buildHtml(child);
-	this.el.appendChild(
-		sigel( child, _.merge( _.filter( Object.keys(me.$$configs), matchConfig ) )
-	)
-	
-	function matchConfig(sel) { return child.match(sel); }
+	this.el.appendChild( 
+		child instanceof Node	? child : 
+		child instanceof Sigel	? child.el :
+		/* otherwise			*/buildHtml(child) );
 }
 
 function remove( child ) {
 	this.el.removeChild( child instanceof Sigel	? child.el : child );
+}
+
+function children(childs) {
+	var el = this.el;
+	while (el.firstChild) el.removeChild(el.firstChild);
+	_.each( childs, append.bind(this) );
 }
 
 function setVisible( v ) { 
@@ -298,12 +337,12 @@ function setVisible( v ) {
 
 function setCss( val ) {
 	var me = this;
-	if(me.$$css) _.each( me.$css, function(c) { me.el.classList.remove(c); } );
+	if(me.$$css) _.each( me.$$css, function(c) { me.el.classList.remove(c); } );
 	me.$$css = _.isObj(val)	? _.filter( Object.keys(val), _.objGetter(val) ) :
 				_.isStr(val)	? val.match(/\S+/g) :
 				_.isArray(val)	? val :
 				/* otherwise 	*/undefined;
-	if(me.$$css) _.each( sel.$$css, function(c) { me.el.classList.add(c); } );
+	if(me.$$css) _.each( me.$$css, function(c) { me.el.classList.add(c); } );
 }
 
 function setStyle( val ) {
@@ -319,5 +358,6 @@ function setAttr( val ) {
 	me.$$attrs = _.isObj( val ) ?  Object.keys(val) : null;
 	if(me.$$attrs) _.each( me.$$attrs, function( a ) { me.el.setAttribute( a, val[a].toString() ); } );
 }
+
 })()
 
