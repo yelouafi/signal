@@ -21,12 +21,12 @@
     </p>
     <p>
     	Todo List
-    	<a href="#" ss-sort="click">sort</a>
+    	<a href="#" class="sort">sort</a>
     </p>
     <ul id="todoList">
-        <li template="tmap:">
-			<input type="checkbox" class="check" /> 
-			<span class="todoText">...</span>
+        <li template id=todo>
+			<input type="checkbox" class="done" /> 
+			<span class="todoText">todo here</span>
 			<button class="remove" >Remove</button>
 		</li>
     </ul>
@@ -34,35 +34,32 @@
 
 <script src="../score.js"></script>
 <script src="../signal.js"></script>
-<script src="../signal.dom.js"></script>
+<script src="../score.dom.js"></script>
 <script>
 
-var addTodo = $('#addTodo').click( todoText ),
-	removeTodo = $('#todoList').merge('todo.remove'),
-	sortTodos = removeTodo = $('#sort').click();
+var todoList = $('#todoList'),
+	todoText =  $('#addTodo').$click().map($('#todoText').getter('value')),
+	addTodo = ss.obj({ text: todoText}),
+	removeTodo = todoList.$click('li .remove').map('.target.parentElement').map( function(el) { return $(el).tdata; } ),
+	sortTodos = $('.sort').$click(),
+	ttodo = $.t('todo', function(text) {
+		var cb = this.$('.done');
+		return { 
+			css: { done: cb.$checked() },
+			'>span': { text: text }
+		};
+	});
 
-var todosList = ss.reduce([],
-	[addTodo, function(arr, todo) { arr.push({ text: todo }); return arr; }],
-	[removeTodo, _.remove],
-	[sortTodos, _.bindr( _.sort, 'text' )]
-)
+var todos = ss.reduce([],
+		[addTodo, _.add],
+		[removeTodo, _.remove],
+		[sortTodos, _.bindl( _.sort, 'text' )]
+	);
 
-
-var todoTemplate = $.t('@todo', function(data, ch) {
-	return {
-		$remove: ch('.remove').click(data),
-		css: { done: ch('.check').checked() },
-		'.todoText': { text: data.text }
-	};
+$('#todoList', { 
+	children: addTodo.map(ttodo), 
+	remove: removeTodo.map($)
 });
-
-$('#todoList', {
-	children: todoTemplate.tmap( todoList )
-});
-
-
-
-
 
 </script>
 </body>

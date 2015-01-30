@@ -36,12 +36,12 @@ _.callw		= function() {
 }
 _.bind	= Function.prototype.bind;
 _.bindl	= function(fn) { 
-	return _.bind.apply( fn, [null].concat( _.slice(arguments, 1 )) ); 
+	return _.bind.apply( fn, [undefined].concat( _.slice(arguments, 1 )) ); 
 }
 _.bindr	= function(fn) {
 	var bargs = _.slice( arguments, 1 );
 	return function() { 
-		return fn.apply( null, _.slice(arguments).concat(bargs) );
+		return fn.apply( undefined, _.slice(arguments).concat(bargs) );
 	} 
 }
 
@@ -58,6 +58,11 @@ _.remove = function(arr, el) {
 	if( idx >= 0)
 		return arr.splice(idx, 1);
 }
+_.sort = function(comp, arr) {
+	comp = _.fn(comp, function(p1, p2) { return p1[comp] < p2[comp] });
+	return arr.sort(comp);
+}
+
 _.each = function(iter, cb, exit) {
 	exit = _.fn( exit, _.falsy );
 	for(var i = 0, l = iter.length; i < l; i++) {
@@ -139,10 +144,6 @@ _.merge = function() {
 		})
 	} );
 	return res;
-}
-_.sort = function(arr, comp) {
-	comp = _.fn(comp, function(p1, p2) { return p1[comp] < p2[comp] });
-	return arr.sort(comp);
 }
 
 _.pipe = function(fns, canContinue) {

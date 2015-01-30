@@ -1,7 +1,7 @@
 (function() {
 
 var _ = window.ss_;
-window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine, or: or, and: and, never: never,
+window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine, or: or, and: and, never: never, obj: obj,
 				keep: keep, map: smap, def: def, slot: slot, if: iif, switch: sswitch, join: join, flatMap: flatMap,
 				lift: lift, reduce: sreduce, cycle: cycle, array: array, fsm: fsm,
 				timer: timer, seconds: seconds, clock: clock, assign: assign, printGraph: printGraph 
@@ -80,7 +80,12 @@ function signal() {
 	sigval.or = _.bindl( or, sigval );
 	sigval.counter = _.bindl( sreduce, sigval, 0, _.inc );
 	sigval.occ = discrete ? sigval : or( sigval );
-	sigval.$to = _.bindl( assign, sigval );
+	sigval.tap = function(fn) {
+		return smap(sigval, function(v) {
+			fn(v);
+			return v;
+		})
+	}
 	
 	function sigval() { return currentValue; }
 	return sigval;
@@ -233,6 +238,10 @@ function smap() {
 	} );
 }
 
+function obj(conf) {
+	return smap(conf, _.id);
+}
+
 function def( start, reactions /*, ... */ ) {
 	var sources = _.map( discr( _.slice( arguments, 1 ) ), smap );
 	return combine( sources, function( values, src, __ ) {
@@ -333,15 +342,10 @@ function seconds( stop ) {
 	return timer( 1000, stop ).counter();
 }
 
+
+
 function assign( sig, target, prop ) {
-	target = _.isStr(target) ? document.querySelector(target) : target;
-	var defprop = target instanceof Element ? 'textContent' : '';
-	if( sig() !== neant )
-		target[ prop || defprop ] = sig();
-	sig.on(function(v) {
-		target[ prop || defprop ] = v;
-	});
-	return sig;
+	
 }
 
 function printGraph( sig, level ) {
