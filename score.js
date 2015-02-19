@@ -20,8 +20,8 @@ _.lte			= function(pred) { return function(arg) { return pred >= arg; }; };
 
 _.fnot 			= function(fpred) { return function() { return !fpred.apply(null, arguments); } }
 _.inc 			= function(v) { return v+1 }
-_.or 			= function() { return any( arguments, id ); }
-_.and 			= function() { return first( arguments, not ) === -1 }
+_.or 			= function() { return _.any( arguments, _.id ); }
+_.and 			= function() { return _.first( arguments, _.not ) === -1 }
 _.noop			= function noop() {}
 _.id			= function(val) { return val; }
 _.val			= function(val) {  return function() { return val; } }
@@ -58,9 +58,13 @@ _.remove = function(arr, el) {
 	if( idx >= 0)
 		return arr.splice(idx, 1);
 }
-_.sort = function(comp, arr) {
-	comp = _.fn(comp, function(p1, p2) { return p1[comp] < p2[comp] });
-	return arr.sort(comp);
+_.sort = function(arr, comp) {
+	var fncomp = comp && _.fn(comp, function(p1, p2) { 
+			return	p1[comp] < p2[comp] ?	-1 :
+					p1[comp] > p2[comp] ?	1 :
+					/* equals 			*/	0;		
+		});
+	return arr.sort(fncomp);
 }
 
 _.each = function(iter, cb, exit) {
@@ -161,7 +165,7 @@ _.pipe = function(fns, canContinue) {
 
 _.propGetter	= function(prop) { return function(o) { return o[prop]; } }
 _.objGetter		= function(obj) { return function(prop) { return obj[prop]; } }
-_.applyEach		= function(fns, target) { return ( _.isObj(fns) ? _.mapObj : _.map )( fns, callw(target) ); }
+_.applyEach		= function(fns, target) { return ( _.isObj(fns) ? _.mapObj : _.map )( fns, _.callw(target) ); }
 _.getProp		= function(path, obj) { return _.pipe( _.map( path, _.propGetter ), _.isObj )(obj); }
 
 _.freduce = function( state, fn ) {

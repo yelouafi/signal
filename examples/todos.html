@@ -9,6 +9,9 @@
 		  text-decoration: line-through;
 		  color: grey;
 		}
+		.error {
+			border: 1px solid red;
+		}
 	</style>
 
 </head>
@@ -36,30 +39,63 @@
 <script src="../signal.js"></script>
 <script src="../score.dom.js"></script>
 <script>
-
+var _ = ss_;
 var todoList = $('#todoList'),
-	todoText =  $('#addTodo').$click().map($('#todoText').getter('value')),
-	addTodo = ss.obj({ text: todoText}),
-	removeTodo = todoList.$click('li .remove').map('.target.parentElement').map( function(el) { return $(el).tdata; } ),
+	todoText = $('#todoText'),
+	addTodo = $('#addTodo'),
+	
+	newTodo = ss.obj({ text: addTodo.$click().map(todoText.getter('value')) }),
+	removeTodo = todoList.signal('li', '$removeTodo').map('.detail.data'),
 	sortTodos = $('.sort').$click(),
-	ttodo = $.t('todo', function(text) {
-		var cb = this.$('.done');
+	
+	ttodo = $.t('todo', function(data) {
 		return { 
-			css: { done: cb.$checked() },
-			'>span': { text: text }
+			css: { done: this.$('.done').$checked() },
+			'>span': { text: data.text },
+			$removeTodo: this.$('.remove').$click().val(data)
 		};
 	});
-
-var todos = ss.reduce([],
-		[addTodo, _.add],
-		[removeTodo, _.remove],
-		[sortTodos, _.bindl( _.sort, 'text' )]
+	
+function todos(add, remove, sort) {
+	
+	function isValid(todo) {
+		return todo.text && todo.text.trim();
+	}
+	
+	var addValid 	= add.filter(isValid);
+	var addInvalid 	= add.filter(_.fnot(isValid));
+	
+	var todos = ss.def([],
+		[addValid, function(todo) { 
+			return todos().concat(todo); }],
+		[remove, function(todo) { 
+			var arr = todos().slice(); 
+			_.remove(arr, todo); 
+			return arr; }],
+		[sort, function () {
+			return _.sort(todos().slice(), 'text');
+		}]
 	);
+	return {
+		addValid: addValid,
+		addInvalid: addInvalid,
+		todos: todos
+	}
+	
+}
 
-$('#todoList', { 
-	children: addTodo.map(ttodo), 
-	remove: removeTodo.map($)
+var mTodos = todos(newTodo, removeTodo, sortTodos);
+var textError = ss.bstate(false, mTodos.addInvalid, mTodos.addValid).log('text error: ');
+$(todoText, {
+	value: mTodos.addValid.val(''),
+	css: { error: textError },
+	focus: mTodos.addValid
 });
+
+$(todoList, { 
+	children: ttodo.collect(mTodos.todos)
+});
+
 
 </script>
 </body>

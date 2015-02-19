@@ -2,21 +2,18 @@
 var _ = ss_;
 window.$ = elm;
 window.$.t = template;
-var elcache = window.$elcache = {}, uuid = 0;
+var elcache = {}, uuid = 0;
 function elm(el, src) {
-	el = el instanceof Element ? el : document.querySelector(el);
-	var ret = el[el.dataset.uid];
-	if( !ret ) {
-		el.dataset.uid = (++uuid);
-		ret = elcache[uuid] =  new Elem(el)
-	}
+	el =	_.isStr(el) ? document.querySelector(el) : el;
+	var ret = el instanceof Elem ? el : elcache[el.dataset.uid] || newEl(el);
 	if(src && _.isObj(src))
-		smap(ret, src);
+		ret.config(src);
 	return ret;
-}
-
-function smap(elm, src) {
-	elm.$$src = ss.obj(src).tap(function(v) { elm.update(v) });
+	
+	function newEl(domEl) {
+		el.dataset.uid = (++uuid);
+		return elcache[uuid] =  new Elem(el);
+	}
 }
 
 function eventDelegate( root ) {
@@ -83,6 +80,10 @@ function Elem(el) {
 	this.$$eprops = {};
 }
 
+Elem.prototype.matches = function (selector) {
+	return this.el.matches(selector);
+}
+
 Elem.prototype.$ = function(selector) {
 	return elm(this.el.querySelector(selector));
 }
@@ -104,13 +105,17 @@ Elem.prototype.getter = function(prop) {
 	}.bind(this);
 }
 
-Elem.prototype.update = function(conf) {
+Elem.prototype.config = function(conf) {
 	var me = this;
 	_.eachKey(conf, function(val, key) {
 		if( key[0] === '>' ) {
-			_.each( me.$$(key.slice(1)), function(elm) { elm.update(val); });
-		} else
-			me.prop(key)(val);
+			_.each( me.$$(key.slice(1)), function(elm) { elm.config(val); });
+		} else if( key[0] === '$' ) {
+			me.domSignal(key, val);	
+		} else {
+			var prop = me.prop(key);
+			prop && ss.map(val, prop);
+		}
 	});
 	return this;
 }
@@ -182,12 +187,14 @@ Elem.simpleProp('focus', function(v) {
 });
 
 Elem.defineProp('children', function() {
+	var docf = document.createDocumentFragment();
 	return {
 		getter: function() { return this.$$children || []; },
 		setter: function(elms) {
 			var el = this.el;
 			while (el.firstChild) el.removeChild(el.firstChild);
-			_.each( elms, function(ch) { el.appendChild(ch.el); } );
+			_.each( elms, function(ch) { docf.appendChild(ch.el); } );
+			el.appendChild(docf);
 			this.$$children = elms;
 		}
 	}
@@ -217,6 +224,15 @@ Elem.prototype.signal = function ( selector/* opt */, event ) {
 	return sig;
 }
 
+Elem.prototype.domSignal = function (name, sig) {
+	var me = this;
+	sig.on( function (v) {
+		var evt = document.createEvent("CustomEvent");
+		evt.initCustomEvent( name, true, false, { data: v, target: me });
+		me.el.dispatchEvent(evt);
+	});
+}
+
 _.each(	['click', 'dblclick', 'mousedown', 'mouseup', 'mouseover', 'mousemove', 'mouseout', 'dragstart', 'drag', 'dragenter', 
 		'dragleave', 'dragover', 'drop', 'dragend', 'keydown', 'keypress', 'keyup', 'select', 'input', 'change', 'submit', 'reset', 'focus', 'blur'], 
 	function(event) {  
@@ -232,7 +248,7 @@ _.each(	[	['value'		,'change'	,'value'],
 		var name = opt[0], defaultEvent = opt[1], prop = opt[2];
 		Elem.prototype['$'+name] = function( event ) {
 			var getter = this.getter(prop);
-			return ss.def( getter(), [this.signal( null, event || defaultEvent ), _.id] );  
+			return ss.def( getter(), [this.signal( null, event || defaultEvent ), getter] );  
 		} 
 	});
 
@@ -240,13 +256,12 @@ var tpls = {};
 function template(id, fnConf) {
 	var tel = tpls[id] || ( tpls[id] = pullTemplate(id) );
 	fnConf = _.fn( fnConf );
-	create.collect = collect.bind(create);
+	create.collect = _.bindl(collect, create);
 	return tel && create;
 	
 	function create(data) {
 		var ee = elm(tel.cloneNode(true));
-		ee.tdata = data;
-		smap(ee, fnConf.call(ee, data));
+		ee.config( fnConf.call(ee, data) );
 		return ee;
 	}
 	
@@ -262,9 +277,13 @@ function template(id, fnConf) {
 }
 
 function collect(fn, src) {
-	return _.map( src, function(obj) {
-		return obj.$$el || (obj.$$el = fn(obj));
-	});
+	return src.map(sync);
+	
+	function sync(arr) {
+		return _.map( arr, function(obj) {
+			return obj.$$el || (obj.$$el = fn(obj));
+		});	
+	}
 }
 
 

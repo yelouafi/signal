@@ -1,9 +1,9 @@
 (function() {
 
 var _ = window.ss_;
-window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine, or: or, and: and, never: never, obj: obj,
+window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine, or: or, and: and, never: never, obj: obj, isSig: isSig,
 				keep: keep, map: smap, def: def, slot: slot, if: iif, switch: sswitch, join: join, flatMap: flatMap,
-				lift: lift, reduce: sreduce, cycle: cycle, array: array, fsm: fsm,
+				lift: lift, reduce: sreduce, cycle: cycle, array: array, fsm: fsm, bstate: bstate,
 				timer: timer, seconds: seconds, clock: clock, assign: assign, printGraph: printGraph 
 			}
 
@@ -69,6 +69,9 @@ function signal() {
 	sigval.map = function( getter, args /***/ ) { 
 		return smap( sigval, _.fapply.apply( null, [].concat( getter, _.slice(arguments,1) ) ) )
 	};
+	sigval.val = function (val) {
+		return smap( sigval, _.val(val) );
+	}
 	sigval.reduce = _.bindl( sreduce, sigval );
 	sigval.filter = _.bindl( sfilter, sigval);
 	_.each( ['eq', 'gt', 'gte', 'lt', 'lte'], function( key ) {
@@ -240,6 +243,10 @@ function smap() {
 
 function obj(conf) {
 	return smap(conf, _.id);
+}
+
+function bstate(start, evOn, evOff) {
+	return def( start, [evOn, true], [evOff, false]);
 }
 
 function def( start, reactions /*, ... */ ) {
