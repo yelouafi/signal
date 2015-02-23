@@ -1,8 +1,10 @@
-(function() {
-var _ = ss_;
-window.$ = elm;
-window.$.t = template;
+var _ = require('../base.js');
+var ss = require('../signal.js'),
+	signal = ss.signal;
+
+
 var elcache = {}, uuid = 0;
+
 function elm(el, src) {
 	el =	_.isStr(el) ? document.querySelector(el) : el;
 	var ret = el instanceof Elem ? el : elcache[el.dataset.uid] || newEl(el);
@@ -156,6 +158,10 @@ Elem.simpleProp('visible', function(v) {
 			this.el.style.removeProperty('display'); 
 });
 
+Elem.simpleProp('enabled', function(v) {
+	this.el.disabled = !v;
+});
+
 Elem.simpleProp('css', function( val ) {
 	var classList = this.el.classList;
 	this.$$css && _.each( this.$$css, classList.remove.bind(classList) );
@@ -251,6 +257,18 @@ _.each(	[	['value'		,'change'	,'value'],
 			return ss.def( getter(), [this.signal( null, event || defaultEvent ), getter] );  
 		} 
 	});
+	
+Elem.prototype.$keyChar = function (ch) {
+	var sig = this.$keypress().map(function(e) { 
+		return String.fromCharCode(e.keyCode)
+	});
+	return arguments.length ? sig.filter(ch) : sig;
+};
+
+Elem.prototype.$keyCode = function (code) { 
+	var sig = this.$keypress().map('.keyCode');
+	return arguments.length ? sig.filter(code) : sig;
+};
 
 var tpls = {};
 function template(id, fnConf) {
@@ -286,6 +304,6 @@ function collect(fn, src) {
 	}
 }
 
-
-})()
+elm.t = template;
+ss.$ = elm;
 

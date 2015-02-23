@@ -14,14 +14,22 @@
 	</p>
 </div>
 
-<script src="../score.js"></script>
 <script src="../signal.js"></script>
-<script src="../signal.dom.js"></script>
+
 <script>
-    
-ss	.or( $$('up').click(1), $$('down').click(-1) )
-	.reduce(0, function (prev, cur) { return prev + cur })
-	.$to('#count')
+
+var ss = window.ss, $ = ss.$;
+	
+function upDown(up, down) {
+	return ss.merge(up, down).fold(0, function (prev, cur) { 
+		return prev + cur 
+	});
+}
+
+$('#count', {
+	text: upDown( $('#up').$click().val(1), $('#down').$click().val(-1) )
+})
+
 
 </script>
 </body>

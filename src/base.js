@@ -1,6 +1,5 @@
-(function() {
 
-var _ = window.ss_ = {};
+var _ = {};
 var valueObjs		= ['string', 'boolean', 'number', Date];
 
 _.slice 		= function( arr, begin, end) { return Array.prototype.slice.call( arr, begin, end ); };
@@ -168,8 +167,10 @@ _.objGetter		= function(obj) { return function(prop) { return obj[prop]; } }
 _.applyEach		= function(fns, target) { return ( _.isObj(fns) ? _.mapObj : _.map )( fns, _.callw(target) ); }
 _.getProp		= function(path, obj) { return _.pipe( _.map( path, _.propGetter ), _.isObj )(obj); }
 
-_.freduce = function( state, fn ) {
-	return function(value) { return ( state = fn( state, value ) ); }
+_.ffold = function( state, fn ) {
+	return function(value) { 
+		return ( state = fn( state, value ) ); 
+	};
 }
 
 /*
@@ -215,4 +216,4 @@ _.fapply = function( config, args /*...*/ ) {
 	}
 }
 
-})()
+module.exports = _;

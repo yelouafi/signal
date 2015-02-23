@@ -1,7 +1,7 @@
-(function() {
+var _ = require('../base.js');
+var ss = require('../signal.js'),
+	signal = ss.signal;
 
-var ss = window.ss, _ = window.ss_;
-ss.ajaxSig = ajaxSig;
 
 function queryString(obj) {
 	var res = [];
@@ -12,7 +12,7 @@ function queryString(obj) {
 }
 
 function ajaxSig( req ) {
-	var xhr = new XMLHttpRequest(), sig = ss.signal();
+	var xhr = new XMLHttpRequest(), sig = signal();
 	
 	if(req.headers)
 		_.eachKey( req.headers, function(val, key) {
@@ -34,4 +34,4 @@ function ajaxSig( req ) {
 	}
 }
 
-})();
+ss.ajax = ajaxSig;

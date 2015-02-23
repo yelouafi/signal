@@ -1,19 +1,34 @@
-(function() {
+var _ = require("./score.js");
 
-var _ = window.ss_;
-window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine, or: or, and: and, map: smap, def: def, slot: slot, if: iif, switch: sswitch,
-				lift: lift, reduce: sreduce, cycle: cycle, array: array, fsm: fsm,
+window.ss = { 	neant: neant, signal: signal, collect: collect, combine: combine, or: or, and: and, never: never, obj: obj, isSig: isSig,
+				keep: keep, map: smap, def: def, slot: slot, if: iif, switch: sswitch, join: join, flatMap: flatMap,
+				lift: lift, reduce: sreduce, cycle: cycle, array: array, fsm: fsm, bstate: bstate,
 				timer: timer, seconds: seconds, clock: clock, assign: assign, printGraph: printGraph 
 			}
 
 var neant = new function Neant() {}
 function isSig(arg) { return arg && arg.$$sig; };
 function occ(sig) { return sig.occ; };
+function never() { return signal(); }
 
-function Event() { this.slots = []; }
-Event.prototype.on    = function(slot) 	{ _.add( this.slots, slot, true ); };
-Event.prototype.off   = function(slot) 	{ _.remove( this.slots, slot; ) };
-Event.prototype.emit  = function (data) {  _.each( this.slots, _.callw( data ) ) };
+
+
+function Stream(sig) {
+	if( !(this instanceof Stream) ) return new Stream(sig);
+	this.sig = sig;
+	this.sample = sig() !== neant;
+	this.arr = this.sample || [];
+}
+Stream.prototype.push = function() {
+	var v = this.sig();
+	if(!this.sample && v !== neant) this.arr.push(v);
+};
+Stream.prototype.canPick = function() { 
+	return this.sample || this.arr.length; 
+};
+Stream.prototype.pick = function() { 
+	return this.sample ? this.sig() : this.arr.shift();
+}
 
 function signal() {
 	var startValue = arguments.length ? arguments[0] : neant,
@@ -45,6 +60,9 @@ function signal() {
 	sigval.map = function( getter, args /***/ ) { 
 		return smap( sigval, _.fapply.apply( null, [].concat( getter, _.slice(arguments,1) ) ) )
 	};
+	sigval.val = function (val) {
+		return smap( sigval, _.val(val) );
+	}
 	sigval.reduce = _.bindl( sreduce, sigval );
 	sigval.filter = _.bindl( sfilter, sigval);
 	_.each( ['eq', 'gt', 'gte', 'lt', 'lte'], function( key ) {
@@ -56,12 +74,14 @@ function signal() {
 	sigval.or = _.bindl( or, sigval );
 	sigval.counter = _.bindl( sreduce, sigval, 0, _.inc );
 	sigval.occ = discrete ? sigval : or( sigval );
-	sigval.$to = _.bindl( assign, sigval );
-	
-	function sigval() { 
-		if( DepsTracker.tracking() ) DepsTracker.addDep( sigval );
-		return currentValue; 
+	sigval.tap = function(fn) {
+		return smap(sigval, function(v) {
+			fn(v);
+			return v;
+		})
 	}
+	
+	function sigval() { return currentValue; }
 	return sigval;
 }
 
@@ -86,7 +106,7 @@ function collect( sources, cb ) {
 }
 
 function combine( sources, fn ) {
-	sources = _.map( sources, function( s ) { return _.isObj( s ) ? combineObj( s ) : s; });
+	sources = _.map( sources, function(s) { return _.isObj(s) ? combineObj(s) : ( _.isArray(s) ? combineArr(s) : s); });
 	var collection = collect( sources, handle );
 	var sig = signal( fn( collection.startValues, null, -1 ) );
 	sig.$$sources = collection.sources;
@@ -103,46 +123,13 @@ function combine( sources, fn ) {
 	}
 }
 
-function computed(fn) {
-	var curSrc, sig = signal( invoke() );
-	sig.activate = function() { curSrc && curSrc.activate; }
-	sig.deactivate = function() { curSrc && curSrc.deactivate; }
-	return sig;
-	
-	function invoke(values, src, idx) {
-		curSrc && curSrc.deactivate();
-		var res = DepsTracker.invoke(fn);
-		curSrc = combine( res.deps, invoke );
-		sig.$$emit(res.result);
-	}
+function combineArr( arr ) {
+	return combine( arr, _.id );
 }
-DepsTracker.stack	= [];
-DepsTracker.invoke = function(fn) {
-	DepsTracker.stack.push([]);
-	var res = fn();
-	return { deps: DepsTracker.stack.pop(), result: res };
-}
-DepsTracker.tracking	= function() 	{ DepsTracker.stack.length; };
-DepsTracker.addDep		= function(dep) { return _.add( DepsTracker.stack, dep, true ); }
-
-function sswitch( startSig, events /* ... */ ) {
-	events = _.slice(arguments, 1);
-	return computed(handle);
-	
-	function handle( values, src, idx ) {
-		if(!src) {
-			_.each( events, _.callw() );
-			return startSig();
-		} else {
-			return src()();
-		}
-	}
-}
-
 
 function combineObj( obj ) {
 	var args = [], keys = Object.keys(obj);
-	_.eachKey( keys, function( key ) { args.push( obj[key] ); });
+	_.each( keys, function( key ) { args.push( obj[key] ); });
 	return combine( args, handle );
 	
 	function handle( values, src, idx ) {
@@ -156,14 +143,13 @@ function combineObj( obj ) {
 	}
 }
 
-
-function slot( fn ) {
-	var src = null;
-	return function slotFn( s ) {
-		src && src.deactivate();
-		src = smap( s, function(v) { fn(v); } );
-		return s;
-	}
+function smap() {
+	var args = _.isArray( arguments[0] ) ? arguments[0] : _.slice( arguments ),
+		fn = _.fn( args.pop() );
+		
+	return combine( args, function( values, src, __ ) {
+		return _.any( values, neant ) ? neant : fn.apply( null, values );
+	} );
 }
 
 function or() {
@@ -176,23 +162,8 @@ function or() {
 function and() {
 	var args = _.isArray( arguments[0] ) ? arguments[0] : _.slice( arguments );
 	return combine( args, function( values, src, __ ) {
-		return src && !any( values, neant ) ? src() : neant;
+		return src && !_.any( values, neant ) ? src() : neant;
 	});
-}
-
-function iif( cond, then, elze ) {
-	return smap( cond, then, elze, function( c, th, el ) {
-		return c ? th : el;
-	} )
-}
-
-function smap() {
-	var args = _.isArray( arguments[0] ) ? arguments[0] : _.slice( arguments ),
-		fn = _.fn( args.pop() );
-		
-	return combine( args, function( values, src, __ ) {
-		return _.any( values, neant ) ? neant : fn.apply( null, values );
-	} );
 }
 
 function def( start, reactions /*, ... */ ) {
@@ -208,25 +179,24 @@ function def( start, reactions /*, ... */ ) {
 	}
 }
 
-function fsm( state, transitions /*, ... */ ) {
-	var sources = _.map( _.slice(arguments, 1), connect );
-	return combine( sources, function( values, src, __ ) {
-		return ( !src ? state : (state = src()) )[1];
-	});
-	
-	function connect( evtr ) {
-		var ev = evtr[0], tr = evtr[1];
-		return smap( ev.occ, function( v ) {
-			var ctr = _.fn(tr, _.isObj (tr) ? tr[state[0]] || tr['*'] : _.id );
-			return ctr(state[1], v);
-		})
-	}
+function iif( cond, then, elze ) {
+	return smap( cond, then, elze, function( c, th, el ) {
+		return c ? th : el;
+	} )
+}
+
+function obj(conf) {
+	return smap(conf, _.id);
+}
+
+function bstate(start, evOn, evOff) {
+	return def( start, [evOn, true], [evOff, false]);
 }
 
 function lift( fn ) {
 	return function() {
-		return smap( [].concat( _.slice( arguments ), fn ) );
-	}
+		return smap( [].concat( _.slice( arguments ), fn ) );    
+	};
 }
 
 function sfilter( source, test ) {
@@ -242,15 +212,9 @@ function sreduce( source, startValue, fn ) {
 	);
 }
 
-function cycle(source, first, second) {
-	var occ = event.reduce( 0, inc );
-	return smap( occ, first, second, function( o, f, s) {
-		return o % 2 === 0 ? f : s;
-	} )
-}
-
 function array( arr, add, remove ) {
 	arr = arr || [];
+	var changes = {};
 	var len = function() { return arr.length };
 	var res = def( arr,
 		[add, 		function(v) { arr.push(v); return arr; }],
@@ -260,9 +224,90 @@ function array( arr, add, remove ) {
 			return arr;
 		}]
 	);
-	
-	res.len = res.reduce( len, len() );
+	res.len = res.reduce( len(), len );
 	return res;
+}
+
+function cycle(source, first, second) {
+	var occ = event.reduce( 0, inc );
+	return smap( occ, first, second, function( o, f, s) {
+		return o % 2 === 0 ? f : s;
+	} )
+}
+
+function slot( tapFn ) {
+	var curSrc;
+	return function( newSig ) {
+		curSrc && curSrc.deactivate();
+		curSrc = smap( newSig, tapFn );
+		return curSrc;
+	}
+}
+
+function sswitch( startSig, event ) {
+    startSig = isSig(startSig) ? startSig : signal(startSig);
+    var emitter = new signal( startSig() ),
+		curSrc = setSig( startSig );
+    event.on(setSig);
+    return emitter;
+    
+    function setSig( newSig ) {
+		var start = !curSrc;
+		curSrc && curSrc.deactivate();
+		curSrc = smap( newSig, emitter.$$emit.bind(emitter) );
+		!start && emitter.$$emit( newSig() );
+	}
+}
+
+function flatMap( event ) {
+    var emitter = new signal(),
+		sigList = [],
+		curSrc = null;
+    event.on(addSig);
+    return emitter;
+    
+    function addSig( newSig ) {
+		sigList.push(newSig);
+		curSrc && curSrc.deactivate();
+		curSrc = smap( ss.or( sigList ), emitter.$$emit.bind(emitter) );
+	}
+}
+
+function keep( sig ) {
+	var start = sig();
+    return start !== neant ? sig : def( start, [ sig, _.id ] );
+}
+
+function join(sources) {
+	var streams = _.map(sources, Stream);
+	return combine( sources, handle );
+	
+	function handle( values, src, idx ) {
+		_.each(streams, function(s) { 
+			s.push(); 
+		} );
+		if( _.all(streams, canPick) )
+			return _.map(streams, pick);
+		return neant;
+	}
+	
+	function canPick(str) { return str.canPick(); }
+	function pick(str) { return str.pick(); }
+}
+
+function fsm( state, transitions /*, ... */ ) {
+	var sources = _.map( _.slice(arguments, 1), connect );
+	return combine( sources, function( values, src, __ ) {
+		return ( !src ? state : (state = src()) )[1];
+	});
+	
+	function connect( evtr ) {
+		var ev = evtr[0], tr = evtr[1];
+		return smap( ev.occ, function( v ) {
+			var ctr = _.fn(tr, _.isObj (tr) ? tr[state[0]] || tr['*'] : _.id );
+			return ctr(state[1], v);
+		})
+	}
 }
 
 function timer( prec, stop ) {
@@ -295,15 +340,10 @@ function seconds( stop ) {
 	return timer( 1000, stop ).counter();
 }
 
+
+
 function assign( sig, target, prop ) {
-	target = _.isStr(target) ? document.querySelector(target) : target;
-	var defprop = target instanceof Element ? 'textContent' : '';
-	if( sig() !== neant )
-		target[ prop || defprop ] = sig();
-	sig.on(function(v) {
-		target[ prop || defprop ] = v;
-	});
-	return sig;
+	
 }
 
 function printGraph( sig, level ) {
@@ -321,5 +361,3 @@ function printGraph( sig, level ) {
 		return s;
 	}
 }
-
-}())
