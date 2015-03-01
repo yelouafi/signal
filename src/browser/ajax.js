@@ -1,5 +1,5 @@
-var _ = require('../base.js');
-var ss = require('../signal.js'),
+var _ = require('../static.js');
+var ss = require('../reactive.js'),
 	signal = ss.signal;
 
 

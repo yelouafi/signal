@@ -13,37 +13,37 @@
 				<h1>todos</h1>
 				<input id="new-todo" placeholder="What needs to be done?" autofocus>
 			</header>
-			<section id="main" data-bind="visible: todos().length">
-				<input id="toggle-all" data-bind="checked: allCompleted" type="checkbox">
+			<section id="main">
+				<input id="toggle-all" type="checkbox">
 				<label for="toggle-all">Mark all as complete</label>
 				<ul id="todo-list">
-					<li class="template">
+					<li class="template" id="ttodo">
 						<div class="view">
 							<input class="toggle" type="checkbox">
 							<label class="label" ></label>
-							<button class="remove" ></button>
+							<button class="destroy" ></button>
 						</div>
 						<input class="edit">
 					</li>
 				</ul>
 			</section>
-			<footer id="footer" data-bind="visible: completedCount() || remainingCount()">
+			<footer id="footer">
 				<span id="todo-count">
-					<strong data-bind="text: remainingCount">0</strong>
-					<span data-bind="text: getLabel(remainingCount)"></span> left
+					<strong id="remainingCount">0</strong>
+					<span id="remainingLabel"></span> left
 				</span>
 				<ul id="filters">
 					<li>
-						<a data-bind="css: { selected: showMode() == 'all' }" href="#/all">All</a>
+						<a data-filter="all" href="#/all">All</a>
 					</li>
 					<li>
-						<a data-bind="css: { selected: showMode() == 'active' }" href="#/active">Active</a>
+						<a data-filter="active" href="#/active">Active</a>
 					</li>
 					<li>
-						<a data-bind="css: { selected: showMode() == 'completed' }" href="#/completed">Completed</a>
+						<a data-filter="completed" href="#/completed">Completed</a>
 					</li>
 				</ul>
-				<button id="clear-completed" data-bind="visible: completedCount, click: removeCompleted">Clear completed (<span data-bind="text: completedCount"></span>)</button>
+				<button id="clear-completed">Clear completed (<span id="completedCount"></span>)</button>
 			</footer>
 		</section>
 		<footer id="info">
@@ -52,7 +52,10 @@
 			<p>Part of <a href="http://todomvc.com">TodoMVC</a></p>
 		</footer>
 		<script src="../../signal.js"></script>
-		<script src="js/todoList.js"></script>
-		<script src="js/app.js"></script>
+		<script src="js/todosCtrl.js"></script>
+		
+		<script type="text/javascript">
+			todoApp.call(ss.$('#todoapp'));
+		</script>
 	</body>
 </html>

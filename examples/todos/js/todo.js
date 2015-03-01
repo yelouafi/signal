@@ -1,3 +1,0 @@
-function todo( startText, inputs ) {
-    
-}

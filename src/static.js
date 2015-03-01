@@ -1,4 +1,5 @@
 
+
 var _ = {};
 var valueObjs		= ['string', 'boolean', 'number', Date];
 
@@ -18,53 +19,38 @@ _.lt 			= function(pred) { return function(arg) { return pred > arg; }; };
 _.lte			= function(pred) { return function(arg) { return pred >= arg; }; };
 
 _.fnot 			= function(fpred) { return function() { return !fpred.apply(null, arguments); } }
-_.inc 			= function(v) { return v+1 }
-_.or 			= function() { return _.any( arguments, _.id ); }
-_.and 			= function() { return _.first( arguments, _.not ) === -1 }
 _.noop			= function noop() {}
 _.id			= function(val) { return val; }
 _.val			= function(val) {  return function() { return val; } }
 _.truthy		= _.val(true);
 _.falsy			= _.val(false); 
-_.fn			= function(arg, alt) { return _.isFn( arg ) ? arg : (alt || _.val(arg)); }
+_.isFalse 		= function(v) { return !v };
+_.isTrue 		= _.id;
+
+_.inc 			= function(v) { return v+1 }
+_.or 			= function() { return _.any(arguments, _.isTrue); };
+_.and 			= function() { return _.all(arguments, _.isTrue); };
+
+
+_.fn			= function(arg, alt) { return _.isFn( arg ) ? arg : (alt || _.val(arg)); };
 _.callw		= function() { 
 	var bargs = _.slice(arguments);
 	return function( fn ) {
 		return fn.apply( null, bargs );
 	}
-}
+};
+
 _.bind	= Function.prototype.bind;
 _.bindl	= function(fn) { 
 	return _.bind.apply( fn, [undefined].concat( _.slice(arguments, 1 )) ); 
-}
+};
+
 _.bindr	= function(fn) {
 	var bargs = _.slice( arguments, 1 );
 	return function() { 
 		return fn.apply( undefined, _.slice(arguments).concat(bargs) );
 	} 
-}
-
-_.empty = function(arr) { return arr.length === 0; };
-_.head = function(arr) { return arr[arr.length-1] };
-_.tail = function(arr) { return arr.slice(1); }
-_.pop = function(arr) { return arr.pop(); };
-_.add = function(arr, el, noDup) {
-	if( !noDup || arr.indexOf(el) < 0 )
-		return arr.push(el);
-}
-_.remove = function(arr, el) {
-	var idx = arr.indexOf(el);
-	if( idx >= 0)
-		return arr.splice(idx, 1);
-}
-_.sort = function(arr, comp) {
-	var fncomp = comp && _.fn(comp, function(p1, p2) { 
-			return	p1[comp] < p2[comp] ?	-1 :
-					p1[comp] > p2[comp] ?	1 :
-					/* equals 			*/	0;		
-		});
-	return arr.sort(fncomp);
-}
+};
 
 _.each = function(iter, cb, exit) {
 	exit = _.fn( exit, _.falsy );
@@ -73,25 +59,37 @@ _.each = function(iter, cb, exit) {
 		if( exit( val, i) ) return;
 		cb( val, i );
 	}
-}
+};
+
 _.any = function(iter, test) {
 	test = _.fn( test, _.eq(test) );
 	for(var i = 0, l = iter.length; i < l; i++)
 		if ( test(iter[i]) ) return true;
 	return false;
-}
+};
+
 _.all = function(iter, test) { 
 	test = _.fn( test, _.eq(test) );
 	for(var i = 0, l = iter.length; i < l; i++)
 		if ( !test(iter[i]) ) return false;
 	return true;
 };
+
 _.first = function(iter, test) {
 	test = _.fn( test, _.eq(test) );
 	for(var i = 0, l = iter.length; i < l; i++)
 		if ( test(iter[i]) ) return i;
 	return -1;
 }
+
+_.count = function(iter, test) {
+	test = _.fn( test, _.eq(test) );
+	var count = 0;
+	for(var i = 0, l = iter.length; i < l; i++)
+		if ( test(iter[i]) ) count++;
+	return count;
+}
+
 _.map = function(iter, cb) {
 	cb = _.fn(cb);
 	var res = new Array( iter.length );
@@ -109,6 +107,41 @@ _.filter = function(iter, test) {
 	}
 	return res;
 }
+_.empty = function(arr) { return arr.length === 0; };
+_.head = function(arr) { return arr[arr.length-1] };
+_.tail = function(arr) { return arr.slice(1); }
+_.pop = function(arr) { return arr.pop(); };
+
+_.add = function(arr, el, noDup) {
+	if( !noDup || arr.indexOf(el) < 0 )
+		return arr.push(el);
+};
+
+_.removeAt = function(arr, idx) {
+	if( idx >= 0)
+		return arr.splice(idx, 1);
+};
+
+_.remove = function(arr, el) {
+	_.removeAt(arr, arr.indexOf(el));
+};
+
+_.removeAll = function(arr, test) {
+	test = _.fn( test, _.eq(test) );
+	for(var i = arr.length-1; i >= 0; i--) {
+		if( test(arr[i], i) )
+			arr.splice(i, 1);
+	}
+};
+
+_.sort = function(arr, comp) {
+	var fncomp = comp && _.fn(comp, function(p1, p2) { 
+			return	p1[comp] < p2[comp] ?	-1 :
+					p1[comp] > p2[comp] ?	1 :
+					/* equals 			*/	0;		
+		});
+	return arr.sort(fncomp);
+};
 
 _.eachKey = function(obj, cb) {
 	var keys = Object.keys(obj);
@@ -166,8 +199,9 @@ _.propGetter	= function(prop) { return function(o) { return o[prop]; } }
 _.objGetter		= function(obj) { return function(prop) { return obj[prop]; } }
 _.applyEach		= function(fns, target) { return ( _.isObj(fns) ? _.mapObj : _.map )( fns, _.callw(target) ); }
 _.getProp		= function(path, obj) { return _.pipe( _.map( path, _.propGetter ), _.isObj )(obj); }
+_.method		= function(obj, meth) { return obj[meth].bind(obj); };
 
-_.ffold = function( state, fn ) {
+_.scanner = function( state, fn ) {
 	return function(value) { 
 		return ( state = fn( state, value ) ); 
 	};
@@ -189,7 +223,7 @@ _.fapply = function( config, args /*...*/ ) {
 		return tpl;
 	
 	function scalar(val) {
-		var methn;
+		var methn, prefix;
 		if( _.isStr(val) && ( (prefix = val[0]) === '.' ) ) {
 			var path = _.slice( val.split('.'), 1 ),
 				head = _.head(path),

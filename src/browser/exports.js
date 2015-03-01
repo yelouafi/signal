@@ -1,4 +1,4 @@
 
 
-window.ss = require('../signal.js');
-window.ss._ = require('../base.js');
+window.ss = require('../reactive.js');
+window.ss._ = require('../static.js');

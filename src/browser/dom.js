@@ -1,5 +1,5 @@
-var _ = require('../base.js');
-var ss = require('../signal.js'),
+var _ = require('../static.js');
+var ss = require('../reactive.js'),
 	signal = ss.signal;
 
 
@@ -7,15 +7,25 @@ var elcache = {}, uuid = 0;
 
 function elm(el, src) {
 	el =	_.isStr(el) ? document.querySelector(el) : el;
-	var ret = el instanceof Elem ? el : elcache[el.dataset.uid] || newEl(el);
+	var ret = el instanceof Relm ? el : elcache[el.dataset.uid] || newEl(el);
 	if(src && _.isObj(src))
 		ret.config(src);
 	return ret;
 	
 	function newEl(domEl) {
 		el.dataset.uid = (++uuid);
-		return elcache[uuid] =  new Elem(el);
+		return elcache[uuid] =  new Relm(el);
 	}
+}
+
+function allElms(selector, fnConf) {
+	var all = _.isStr(selector) ? document.querySelectorAll(selector) : selector;
+	return _.map( all, function(el) {
+		var ee = elm(el);
+		if(fnConf && _.isFn(fnConf))
+			fnConf.call(ee);
+		return ee;
+	} );
 }
 
 function eventDelegate( root ) {
@@ -57,7 +67,9 @@ function eventDelegate( root ) {
 
 function elmProp(prop) {
 	return {
-		getter: function() { return this.el[prop]; },
+		getter: function() { 
+			return this.el[prop];
+		},
 		setter: function(val) {
 			this.el[prop] = val;
 			return this;
@@ -74,7 +86,7 @@ function propFn(getter, setter) {
 	}
 }
 
-function Elem(el) {
+function Relm(el) {
 	this.el = el;
 	this.on = eventDelegate(this.el);
 	this.$$signals = {};
@@ -82,32 +94,36 @@ function Elem(el) {
 	this.$$eprops = {};
 }
 
-Elem.prototype.matches = function (selector) {
+Relm.prototype.matches = function (selector) {
 	return this.el.matches(selector);
 }
 
-Elem.prototype.$ = function(selector) {
-	return elm(this.el.querySelector(selector));
+Relm.prototype.$ = function(selector, src) {
+	return elm(this.el.querySelector(selector), src);
 }
 
-Elem.prototype.$$ = function(selector) {
-	return _.map(this.el.querySelectorAll(selector), elm);
+Relm.prototype.$$ = function(selector, fnConf) {
+	return allElms(this.el.querySelectorAll(selector), fnConf);
 }
 
-Elem.prototype.prop = function(prop) {
+Relm.prototype.data = function(key) {
+	return this.el.dataset[key];
+}
+
+Relm.prototype.prop = function(prop) {
 	var slot = this[prop];
 	return slot ? slot.bind(this) : (
 		this.$$eprops[prop] || ( this.$$eprops[prop] = propFn(elmProp(prop)).bind(this) )
 	);
 }
 
-Elem.prototype.getter = function(prop) {
+Relm.prototype.getter = function(prop) {
 	return function() {
 		return this.prop(prop)();
 	}.bind(this);
 }
 
-Elem.prototype.config = function(conf) {
+Relm.prototype.config = function(conf) {
 	var me = this;
 	_.eachKey(conf, function(val, key) {
 		if( key[0] === '>' ) {
@@ -124,18 +140,18 @@ Elem.prototype.config = function(conf) {
 
 
 
-Elem.defineProp = function(name, fn) {
+Relm.defineProp = function(name, fn) {
 	var conf = _.fn(fn)();
-	return Elem.prototype[name] = propFn(conf.getter, conf.setter);
+	return Relm.prototype[name] = propFn(conf.getter, conf.setter);
 }
 
-Elem.propAlias = function(alias, domProp) {
-	Elem.defineProp(alias, elmProp(domProp));
+Relm.propAlias = function(alias, domProp) {
+	Relm.defineProp(alias, elmProp(domProp));
 }
 
-Elem.simpleProp = function (name, setter) {
+Relm.simpleProp = function (name, setter) {
 	var priv = '@@'+name;
-	Elem.defineProp(name, {
+	Relm.defineProp(name, {
 		getter: function() { 
 			return this[priv];
 		},
@@ -146,23 +162,23 @@ Elem.simpleProp = function (name, setter) {
 	});
 }
 
-Elem.propAlias('value', 'value');
-Elem.propAlias('text', 'textContent');
-Elem.propAlias('html', 'innerHTML');
-Elem.propAlias('checked', 'checked');
-Elem.propAlias('disabled', 'disabled');
-Elem.propAlias('readOnly', 'readOnly');
+Relm.propAlias('value', 'value');
+Relm.propAlias('text', 'textContent');
+Relm.propAlias('html', 'innerHTML');
+Relm.propAlias('checked', 'checked');
+Relm.propAlias('disabled', 'disabled');
+Relm.propAlias('readOnly', 'readOnly');
 
-Elem.simpleProp('visible', function(v) {
-		v ? this.el.style.display = 'none' : 
+Relm.simpleProp('visible', function(v) {
+		!v ? this.el.style.display = 'none' : 
 			this.el.style.removeProperty('display'); 
 });
 
-Elem.simpleProp('enabled', function(v) {
+Relm.simpleProp('enabled', function(v) {
 	this.el.disabled = !v;
 });
 
-Elem.simpleProp('css', function( val ) {
+Relm.simpleProp('css', function( val ) {
 	var classList = this.el.classList;
 	this.$$css && _.each( this.$$css, classList.remove.bind(classList) );
 	this.$$css = 	_.isObj(val)	? _.filter( Object.keys(val), _.objGetter(val) ) :
@@ -172,7 +188,7 @@ Elem.simpleProp('css', function( val ) {
 	_.each( this.$$css, classList.add.bind(classList) );
 })
 
-Elem.simpleProp('style', function(st) {
+Relm.simpleProp('style', function(st) {
 	var style = this.el.style;
 	this.$$style && _.each( st, style.removeProperty.bind(style) );
 	this.$$style = Object.keys(st);
@@ -181,43 +197,49 @@ Elem.simpleProp('style', function(st) {
 	});
 });
 
-Elem.simpleProp('attr', function(v) {
+Relm.simpleProp('attr', function(v) {
 	var el = this.el;
 	this.$$attrs && _.each( this.$$attrs, el.removeAttribute.bind(el) );
 	this.$$attrs = Object.keys(v);
-	_.each( this.$$attrs, function(key) { el.setAttribute(key, v[key]); } );
+	_.each( this.$$attrs, function(key) { 
+		el.setAttribute(key, v[key]);
+	});
 });
 
-Elem.simpleProp('focus', function(v) {
+Relm.simpleProp('focus', function(v) {
 	v ? this.el.focus() : this.el.blur();
 });
 
-Elem.defineProp('children', function() {
+Relm.defineProp('children', function() {
 	var docf = document.createDocumentFragment();
 	return {
 		getter: function() { return this.$$children || []; },
 		setter: function(elms) {
 			var el = this.el;
 			while (el.firstChild) el.removeChild(el.firstChild);
-			_.each( elms, function(ch) { docf.appendChild(ch.el); } );
-			el.appendChild(docf);
+			if(elms && elms.length) {
+				_.each( elms, function(ch) { 
+					docf.appendChild(ch.el); 
+				});
+				el.appendChild(docf);	
+			}
 			this.$$children = elms;
 		}
 	}
 });
 
-Elem.prototype.append = function(elm) {
+Relm.prototype.append = function(elm) {
 	this.el.appendChild(elm.el);
 	this.$$children.push(elm);
 	elm.parent = this;
 }
-Elem.prototype.remove = function(elm) {
+Relm.prototype.remove = function(elm) {
 	this.el.removeChild(elm.el);
 	_.remove(this.$$children, elm);
 	elm.parent = undefined;
 }
 
-Elem.prototype.signal = function ( selector/* opt */, event ) {
+Relm.prototype.signal = function ( selector/* opt */, event ) {
 	var me = this, sig = this.$$signals[event];
 	if( !sig ) {
 		var events = _.isArray(event) ? event : event.trim().split(/\s+/g);
@@ -230,7 +252,7 @@ Elem.prototype.signal = function ( selector/* opt */, event ) {
 	return sig;
 }
 
-Elem.prototype.domSignal = function (name, sig) {
+Relm.prototype.domSignal = function (name, sig) {
 	var me = this;
 	sig.on( function (v) {
 		var evt = document.createEvent("CustomEvent");
@@ -242,7 +264,7 @@ Elem.prototype.domSignal = function (name, sig) {
 _.each(	['click', 'dblclick', 'mousedown', 'mouseup', 'mouseover', 'mousemove', 'mouseout', 'dragstart', 'drag', 'dragenter', 
 		'dragleave', 'dragover', 'drop', 'dragend', 'keydown', 'keypress', 'keyup', 'select', 'input', 'change', 'submit', 'reset', 'focus', 'blur'], 
 	function(event) {  
-		Elem.prototype['$'+event] = function (selector) { 
+		Relm.prototype['$'+event] = function (selector) { 
 			return this.signal( selector, event ); 
 		};
 	});
@@ -252,58 +274,58 @@ _.each(	[	['value'		,'change'	,'value'],
 		], 
 	function( opt ) {
 		var name = opt[0], defaultEvent = opt[1], prop = opt[2];
-		Elem.prototype['$'+name] = function( event ) {
+		Relm.prototype['$'+name] = function( event ) {
 			var getter = this.getter(prop);
 			return ss.def( getter(), [this.signal( null, event || defaultEvent ), getter] );  
 		} 
 	});
 	
-Elem.prototype.$keyChar = function (ch) {
+Relm.prototype.$keyChar = function (ch) {
 	var sig = this.$keypress().map(function(e) { 
 		return String.fromCharCode(e.keyCode)
 	});
 	return arguments.length ? sig.filter(ch) : sig;
 };
 
-Elem.prototype.$keyCode = function (code) { 
+Relm.prototype.$keyCode = function (code) { 
 	var sig = this.$keypress().map('.keyCode');
 	return arguments.length ? sig.filter(code) : sig;
 };
 
 var tpls = {};
-function template(id, fnConf) {
-	var tel = tpls[id] || ( tpls[id] = pullTemplate(id) );
-	fnConf = _.fn( fnConf );
-	create.collect = _.bindl(collect, create);
+Relm.prototype.template = function(selector) {
+	var tel = tpls[selector] || ( tpls[selector] = pullTemplate(this.el, selector) );
 	return tel && create;
 	
-	function create(data) {
-		var ee = elm(tel.cloneNode(true));
-		ee.config( fnConf.call(ee, data) );
-		return ee;
+	function create() {
+		return elm(tel.cloneNode(true));
 	}
 	
-	function pullTemplate(id) {
-		var tel = document.getElementById(id);
+	function pullTemplate(el, selector) {
+		var tel = el.querySelector(selector);
 		if(tel) {
 			tel.parentElement.removeChild(tel);
-			tel.removeAttribute('template');
+			tel.classList.remove('template');
 			tel.removeAttribute('id');
-			return (tpls[id] = tel);
-		}
+			return (tpls[selector] = tel);
+		} else
+			throw 'Unable to find template "' + selector + '"!!';
 	}
 }
 
-function collect(fn, src) {
+function tmap(tfn, src, trackByProp) {
+	var cache = {};
+	var getKey = trackByProp ? _.propGetter(trackByProp) : JSON.stringify;
 	return src.map(sync);
 	
 	function sync(arr) {
 		return _.map( arr, function(obj) {
-			return obj.$$el || (obj.$$el = fn(obj));
+			var key = getKey(obj);
+			return cache[key] || (cache[key] = tfn(obj));
 		});	
 	}
 }
 
-elm.t = template;
+elm.tmap = tmap;
 ss.$ = elm;
-
+ss.$$ = allElms;
