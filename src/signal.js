@@ -45,9 +45,12 @@ Signal.prototype.name = function(name) {
 
 Signal.prototype.log = function(log) {
     this.$$log = arguments.length ? log : true;
+    return this;
 }
 
 Signal.prototype.$$emit = function(val) {
+	if(this.$$log)
+		log(this.$$name, val);
 	this.$$valueEvent.emit(val);
 	if( !this.$$discrete )
 		this.$$currentValue = val;

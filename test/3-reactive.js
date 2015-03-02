@@ -1,19 +1,8 @@
 var assert = require("assert")
 var ss = require("../src/reactive.js");
 
-describe('signal', function(){
+describe('ss', function(){
     
-    describe('.Signal', function(){
-        it('should keep current value for continous signal', function(){
-            var s = ss.signal(0);
-            assert.equal(s.$$currentValue, 0);
-            
-            s.$$emit(2);
-            assert.equal(s.$$currentValue, 2);
-            
-        });
-    });
-   
     describe('#collect()', function(){
         var result,
             s1 = ss.signal(0),
@@ -272,5 +261,188 @@ describe('signal', function(){
             sub.$$emit(5);
             assert.equal(sig.$$currentValue, 10+1-5);
         });
-    });    
+    });   
+    
+    describe('#bState()', function(){
+        
+        it('should bind on/off state to 2 events', function() {
+            var sOn = ss.signal(),
+                sOff = ss.signal(),
+                sig = ss.bState(false, sOn, sOff);
+        
+            sOn.$$emit();
+            assert.equal(sig.$$currentValue, true);
+            
+            sOff.$$emit();
+            assert.equal(sig.$$currentValue, false);
+            
+            sOn.$$emit();
+            assert.equal(sig.$$currentValue, true);
+            sOn.$$emit();
+            assert.equal(sig.$$currentValue, true);
+            
+            sOff.$$emit();
+            assert.equal(sig.$$currentValue, false);
+            sOff.$$emit();
+            assert.equal(sig.$$currentValue, false);
+        });
+        
+        it('should switch on/off state on one event occrunce', function() {
+            var sOn = ss.signal(),
+                sig = ss.bState(false, sOn);
+        
+            sOn.$$emit();
+            assert.equal(sig.$$currentValue, true);
+            
+            sOn.$$emit();
+            assert.equal(sig.$$currentValue, false);
+        });
+    });
+    
 })
+
+describe('Signal.prototype', function() {
+    describe('#$$emit()', function(){
+        it('should keep current value for continous signal', function(){
+            var s = ss.signal(0);
+            assert.equal(s.$$currentValue, 0);
+            
+            s.$$emit(2);
+            assert.equal(s.$$currentValue, 2);
+            
+        });
+    });
+    
+    describe('#map()', function(){
+        it('should map signal values to a function', function(){
+            var s1 = ss.signal(0),
+                s = s1.map(function(v) { 
+                    return v * 2; 
+                });
+            
+            s1.$$emit(2);
+            assert.equal(s.$$currentValue, 4);
+            
+        });
+        
+        it('should map signal values to an array template', function(){
+            var s1 = ss.signal({}),
+                s = s1.map(['.prop1', '.prop2.nested']);
+            
+            s1.$$emit({
+                prop1: 'p1',
+                prop2: {
+                    nested: 'pn'
+                }
+            });
+            assert.deepEqual(s.$$currentValue, ['p1', 'pn']);
+            
+        });
+    });
+    
+    describe('#fold*()', function(){
+        
+        it('fold()-should fold values of a signal with a seed value', function(){
+            var s1 = ss.signal(),
+                acc = s1.fold(10, function(v, p) { return v + p; })
+            
+            assert.equal(acc.$$currentValue, 10);
+            
+            s1.$$emit(2);
+            assert.equal(acc.$$currentValue, 10+2);
+            
+            s1.$$emit(3);
+            assert.equal(acc.$$currentValue, 10+2+3);
+            
+        });
+        
+            it('fold0()-should fold values of a stateful signal using signal current value as a seed', function(){
+            var s1 = ss.signal(10),
+                acc = s1.fold0(function(v, p) { return v + p; })
+            
+            assert.equal(acc.$$currentValue, 10);
+            
+            s1.$$emit(2);
+            assert.equal(acc.$$currentValue, 10+2);
+            
+            s1.$$emit(3);
+            assert.equal(acc.$$currentValue, 10+2+3);
+            
+        });
+    });
+    
+    describe('#counter()', function(){
+        
+        it('should count signal occurrences', function(){
+            var s1 = ss.signal(),
+                count = s1.counter();
+            
+            assert.equal(count.$$currentValue, 0);
+            
+            s1.$$emit(2);
+            assert.equal(count.$$currentValue, 1);
+            
+            s1.$$emit(3);
+            assert.equal(count.$$currentValue, 2);
+            
+        });
+    });
+    
+    describe('#keep()', function(){
+        
+        it('should keep signal occurrences', function(){
+            var s1 = ss.signal(),
+                kept = s1.keep(0);
+            
+            assert.equal(kept.$$currentValue, 0);
+            
+            s1.$$emit(2);
+            assert.equal(kept.$$currentValue, 2);
+            
+            s1.$$emit(3);
+            assert.equal(kept.$$currentValue, 3);
+            
+        });
+    });
+    
+    describe('#eq()', function(){
+        
+        it('should lift eq function', function(){
+            var s1 = ss.signal(5),
+                s2 = ss.signal(3),
+                test = s1.eq(s2);
+            
+            assert.equal(test.$$currentValue, false);
+            
+            s1.$$emit(3);
+            assert.equal(test.$$currentValue, true);
+            
+            s2.$$emit(4);
+            assert.equal(test.$$currentValue, false);
+            
+        });
+    });
+    
+    describe('#whenEq()', function(){
+        
+        it('should propgates only if 2 signales are equals', function(){
+            var res = null,
+                s1 = ss.signal(5),
+                s2 = ss.signal(3),
+                test = s1.whenEq(s2);
+            
+            test.on(function(v) {
+                res = v;
+            });
+            
+            s1.$$emit(3);
+            assert.equal(res, true);
+            
+            res = null;
+            s2.$$emit(4);
+            assert.equal(res, null);
+            
+        });
+    });
+    
+});

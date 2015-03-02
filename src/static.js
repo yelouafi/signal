@@ -5,6 +5,7 @@ var valueObjs		= ['string', 'boolean', 'number', Date];
 
 _.slice 		= function( arr, begin, end) { return Array.prototype.slice.call( arr, begin, end ); };
 _.logger 		= function (prefix) { return function(msg) { console.log( prefix, msg ); } };
+
 _.isValue		= function(v) { return v === null || v === undefined || v instanceof String || v instanceof Number || v instanceof Boolean || v instanceof Date  };
 _.isStr			= function(arg) { return (typeof arg === 'string'); };
 _.isArray		= Array.isArray;
@@ -27,10 +28,10 @@ _.falsy			= _.val(false);
 _.isFalse 		= function(v) { return !v };
 _.isTrue 		= _.id;
 
-_.inc 			= function(v) { return v+1 }
+_.inc 			= function(v) { return v+1 };
 _.or 			= function() { return _.any(arguments, _.isTrue); };
 _.and 			= function() { return _.all(arguments, _.isTrue); };
-
+_.if 			= function(cond, then, elze) { return cond ? then : elze; };
 
 _.fn			= function(arg, alt) { return _.isFn( arg ) ? arg : (alt || _.val(arg)); };
 _.callw		= function() { 
@@ -197,28 +198,30 @@ _.pipe = function(fns, canContinue) {
 
 _.propGetter	= function(prop) { return function(o) { return o[prop]; } }
 _.objGetter		= function(obj) { return function(prop) { return obj[prop]; } }
-_.applyEach		= function(fns, target) { return ( _.isObj(fns) ? _.mapObj : _.map )( fns, _.callw(target) ); }
+_.applyEach		= function(fn, target) { return ( _.isObj(fn) ? _.mapObj : _.map )( fn, _.callw(target) ); }
 _.getProp		= function(path, obj) { return _.pipe( _.map( path, _.propGetter ), _.isObj )(obj); }
 _.method		= function(obj, meth) { return obj[meth].bind(obj); };
 
-_.scanner = function( state, fn ) {
+_.scanner = function( seed, fn ) {
 	return function(value) { 
-		return ( state = fn( state, value ) ); 
+		return ( seed = fn( value, seed ) ); 
 	};
 }
 
 /*
-ftemplate(fn, args...) 										-> fn(args..., v)
-ftemplate('.*.prop') 										-> v[*]['prop']
-ftemplate('.*.meth(), args...') 							-> v[*]['meth'](args...)
-ftemplate(['.*.prop1, '.*.meth()'], args...) 				-> [ v[*]['prop'], v[*]['meth'](args...) ]
-ftemplate({prop1: '.*.prop', prop2: '.*.meth()'}, args...)	-> { prop1: v[*]['prop'], prop2: v[*]['meth'](args...) }
+template(fn, args...) 										-> fn(args..., v)
+template('.*.prop') 										-> v[*]['prop']
+template('.*.meth(), args...') 							-> v[*]['meth'](args...)
+template(['.*.prop1, '.*.meth()'], args...) 				-> [ v[*]['prop'], v[*]['meth'](args...) ]
+template({prop1: '.*.prop', prop2: '.*.meth()'}, args...)	-> { prop1: v[*]['prop'], prop2: v[*]['meth'](args...) }
 */
-_.fapply = function( config, args /*...*/ ) {
-	args = _.slice(arguments, 2);
+_.template = function( config, args /*...*/ ) {
+	args = _.slice(arguments, 1);
 	var tpl = makeGetter(config);
-	if( _.isArray(tpl) || _.isObj(tpl) )
-		return _.bindl( _.applyEach, tpl );
+	if( _.isArray(tpl) )
+		return function(target) { return _.map(tpl, _.callw(target)); };
+	if( _.isObj(tpl) )
+		return function(target) { return _.mapObj(tpl, _.callw(target)); };
 	else
 		return tpl;
 	
@@ -227,15 +230,16 @@ _.fapply = function( config, args /*...*/ ) {
 		if( _.isStr(val) && ( (prefix = val[0]) === '.' ) ) {
 			var path = _.slice( val.split('.'), 1 ),
 				head = _.head(path),
-				hasMethod = head.length > 2 && head.indexOf('()') === (head.length - 2),
-				fprop = _.bindl( _.getProp, path );
-			if(!hasMethod) 
-				return fprop;
-			else 
-				return function(v) {
-					args = _.map( args, function(v) { return _.isFn(v) ? v() : v; } )
-					return fprop.apply( null, v, args );
+				hasMethod = head.length > 2 && head.indexOf('()') === (head.length - 2);
+			if(!hasMethod) {
+				return _.bindl( _.getProp, path);
+			} else {
+				path[path.length-1] = head.substr(0, head.length - 2);
+				var fmeth = _.bindl( _.getProp, path);
+				return function(target) {
+					return fmeth(target).apply( target, args );
 				} 
+			}
 		} else
 			return _.fn(val);
 	}
