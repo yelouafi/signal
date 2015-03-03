@@ -1,0 +1,33 @@
+{
+  "name": "signal.js",
+  "version": "0.0.1",
+  "description": "javascript functional(?) reactive programming",
+  "main": "signal.js",
+  "directories": {
+    "example": "examples",
+    "test": "test"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "mocha": "^2.1.0"
+  },
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yelouafi/signal.git"
+  },
+  "keywords": [
+    "frp",
+    "signal",
+    "reactive",
+    "javascript"
+  ],
+  "author": "Yassine Elouafi",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/yelouafi/signal/issues"
+  },
+  "homepage": "https://github.com/yelouafi/signal"
+}

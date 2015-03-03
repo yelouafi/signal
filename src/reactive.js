@@ -12,6 +12,7 @@ var signal = ss.signal = function(val) {
 function isSig(arg) { 
     return arg instanceof Signal; 
 };
+ss.isSig = isSig;
 
 function sample(sig) {
 	return sig.$$currentValue;
@@ -23,6 +24,12 @@ ss.occ = function occ(sig) {
 
 ss.never = function never() { 
     return signal();
+};
+
+ss.now = function now(val) { 
+    var s = signal();
+    setTimeout(s.$$emit.bind(s, val), 0);
+    return s;
 };
 
 ss.makeSig = function(s) {	

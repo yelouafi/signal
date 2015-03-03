@@ -211,7 +211,7 @@ Relm.simpleProp('focus', function(v) {
 });
 
 Relm.defineProp('children', function() {
-	var docf = document.createDocumentFragment();
+	var docf /*= document.createDocumentFragment()*/;
 	return {
 		getter: function() { return this.$$children || []; },
 		setter: function(elms) {
@@ -327,5 +327,8 @@ function tmap(tfn, src, trackByProp) {
 }
 
 elm.tmap = tmap;
-ss.$ = elm;
-ss.$$ = allElms;
+
+module.exports = {
+	$: elm,
+	$$: allElms
+}
