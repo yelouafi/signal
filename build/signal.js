@@ -66,10 +66,9 @@ function doLater(job) {
 }
 
 var elcache = {}, uuid = 0;
-
 function elm(el, src) {
 	el =	_.isStr(el) ? document.querySelector(el) : el;
-	var ret = el instanceof Relm ? el : elcache[el.dataset.uid] || newEl(el);
+	var ret = 	el instanceof Relm ? el : elcache[el.dataset.uid] || newEl(el);
 	if(src && _.isObj(src))
 		ret.config(src);
 	return ret;
@@ -79,6 +78,7 @@ function elm(el, src) {
 		return elcache[uuid] =  new Relm(el);
 	}
 }
+
 
 function allElms(selector, fnConf) {
 	var all = _.isStr(selector) ? document.querySelectorAll(selector) : selector;
@@ -328,6 +328,10 @@ Relm.prototype.remove = function(elm) {
 }
 
 Relm.prototype.signal = function ( selector/* opt */, event ) {
+	if(!event) {
+		event = selector;
+		selector = null;
+	}
 	var me = this, sig = this.$$signals[event];
 	if( !sig ) {
 		var events = _.isArray(event) ? event : event.trim().split(/\s+/g);
@@ -438,6 +442,8 @@ function tmap(tfn, src) {
 }
 
 elm.tmap = tmap;
+window.$window = new Relm(window);
+window.$document = new Relm(document);
 
 module.exports = {
 	$: elm,

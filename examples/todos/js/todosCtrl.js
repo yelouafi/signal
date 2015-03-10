@@ -12,7 +12,7 @@ function todoApp() {
         inputValue	    = me.$('#new-todo').getter('value'),
     	toggleAll	    = me.$('#toggle-all').$checked(),
     	inputEnter	    = me.$('#new-todo').$keyCode(ENTER_KEY),
-    	filter		    = me.$('#filters').$click().map('.target.dataset.filter').keep('all'),
+    	filter		    = $window.signal('hashchange').map(function() { return window.location.hash.substr(2) || 'all' }).keep('all'),
     	archive		    = me.$('#clear-completed').$click(),
     	addTodo         = inputEnter.filter(/\S+/).map(newTodo),
     	removeTodo      = me.signal('li', '$removeTodo').map('.detail.data'),
