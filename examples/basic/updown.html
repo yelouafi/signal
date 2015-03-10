@@ -14,14 +14,14 @@
 	</p>
 </div>
 
-<script src="../signal.js"></script>
+<script src="../../build/signal.js"></script>
 
 <script>
 
 var ss = window.ss, $ = ss.$;
 	
 function upDown(up, down) {
-	return ss.merge(up, down).fold(0, function (prev, cur) { 
+	return ss.merge(up, down).fold(0, function (cur, prev) { 
 		return prev + cur 
 	});
 }

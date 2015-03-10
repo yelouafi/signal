@@ -1,35 +1,63 @@
 var _ = ss._;
 
-function todosModel(array) {
+function todosModel() {
     
-    function addTodo(todo) {
+    function addTodo(todo, array) {
         array.push(todo);
         return array;
     }
     
-    function removeTodo(id) {
-        _.removeAll(array, function(t) {
-            return t.id === id;
-        });
+    function removeTodo(id, array) {
+        _.removeAll(array, todoById(id));
+        return array;
     }
     
-    function clearCompletedTodos() {
+    function updateTodo(data, array) {
+        var idx = _.first(array, todoById(data.id));
+        if(idx >= 0) {
+            var todo = array[idx];
+            _.eachKey(data, function(val, key) {
+               todo[key] = val; 
+            });
+        }
+        return array;
+    }
+    
+    function clearCompletedTodos(__, array) {
         _.removeAll(array, isCompleted);
+        return array;
     }
     
-    function toggleAll(toggle) {
+    function toggleAll(toggle, array) {
         _.each(array, function(t) {
             t.completed = toggle;
         });
         return array;
     }
     
-    function filteredTodos(filter) {
+    function filteredTodos(filter, array) {
         if(filter === 'all') return array;
         if(filter === 'completed') return _.filter(array, isCompleted);
         if(filter === 'active') return _.filter(array, isActive);
     }
     
+    function activeCount(array) {
+        return _.count(array, isActive);
+    }
+    
+    function completedCount(array) {
+        return _.count(array, isActive);
+    }
+    
+    function allCompleted(array) {
+        return _.all(array, isCompleted);
+    }
+    
+    function todoById(id) {
+        return function(t) {
+            return t.id === id;
+        }
+    }    
     
     function isActive(todo) {
         return !todo.completed;
@@ -42,28 +70,12 @@ function todosModel(array) {
     return {
         addTodo: addTodo,
         removeTodo: removeTodo,
+        updateTodo: updateTodo,
         clearCompletedTodos: clearCompletedTodos,
-        filteredTodos: filteredTodos
+        filteredTodos: filteredTodos,
+        activeCount: activeCount,
+        toggleAll: toggleAll,
+        completedCount: completedCount,
+        allCompleted: allCompleted
     }
-}
-
-function todoItemModel(id, title) {
-    var data = { id: id, title: title, completed: false };
-    
-    function setCompleted(isCompleted) {
-        data.completed = isCompleted;
-        return data;
-    }
-    
-    function setTitle(title) {
-        data.title = title;
-        return data;
-    }
-    
-    return {
-        data: data,
-        setCompleted: setCompleted,
-        setTitle: setTitle
-    };
-    
 }

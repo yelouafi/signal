@@ -43,6 +43,7 @@ describe('Signal.prototype', function() {
             assert.equal(s.$$currentValue, 2);
             
         });
+        
     });
     
 });

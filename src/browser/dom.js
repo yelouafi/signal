@@ -2,6 +2,29 @@ var _ = require('../static.js');
 var ss = require('../reactive.js'),
 	signal = ss.signal;
 
+ var raf = window.requestAnimationFrame
+    	|| window.webkitRequestAnimationFrame
+    	|| window.mozRequestAnimationFrame
+    	|| window.msRequestAnimationFrame
+    	|| function(cb) { return window.setTimeout(cb, 0); };
+
+var jobQueue = [];
+function runQueue() {
+	//console.log('running dom update queue; jobs: ', jobQueue.length);
+	try {
+		_.each(jobQueue, function(job) {
+			job();
+		});	
+	} finally {
+		jobQueue = [];
+	}
+}
+function doLater(job) {
+	if( !jobQueue.length ) {
+		raf(runQueue);
+	}
+	jobQueue.push(job);
+}
 
 var elcache = {}, uuid = 0;
 
@@ -71,19 +94,24 @@ function elmProp(prop) {
 			return this.el[prop];
 		},
 		setter: function(val) {
-			this.el[prop] = val;
+			var prev = this.el[prop];
+			if(prev !== val)
+				this.el[prop] = val;
 			return this;
 		}
 	}
 }
 
-function propFn(getter, setter) {
-	return function(val) {
+function makeSlot(getter, setter) {
+	function slot(val) {
 		if(arguments.length  < 1)
 			return getter.call(this);
 		setter.call(this, val);
 		return this;
 	}
+	slot.getter = getter;
+	slot.setter = setter;
+	return slot;
 }
 
 function Relm(el) {
@@ -91,7 +119,12 @@ function Relm(el) {
 	this.on = eventDelegate(this.el);
 	this.$$signals = {};
 	this.$$children = [];
-	this.$$eprops = {};
+	this.$$slots = {};
+}
+
+Relm.prototype.toString = function () {
+	var el = this.el;
+	return el.nodeName.toLowerCase() + (el.id ? '#' + el.id : '') + '.' + el.className;
 }
 
 Relm.prototype.matches = function (selector) {
@@ -110,17 +143,21 @@ Relm.prototype.data = function(key) {
 	return this.el.dataset[key];
 }
 
+Relm.$$slots = {};
 Relm.prototype.prop = function(prop) {
-	var slot = this[prop];
-	return slot ? slot.bind(this) : (
-		this.$$eprops[prop] || ( this.$$eprops[prop] = propFn(elmProp(prop)).bind(this) )
-	);
+	var me = this;
+	return this.$$slots[prop] || (this.$$slots[prop] = bindSlot(prop));
+	
+	function bindSlot(p) {
+		return (Relm.$$slots[p] || makeSlot( elmProp(p) )).bind(me);
+	}
 }
 
 Relm.prototype.getter = function(prop) {
+	var pf = this.prop(prop);
 	return function() {
-		return this.prop(prop)();
-	}.bind(this);
+		return pf();
+	}
 }
 
 Relm.prototype.config = function(conf) {
@@ -132,22 +169,33 @@ Relm.prototype.config = function(conf) {
 			me.domSignal(key, val);	
 		} else {
 			var prop = me.prop(key);
-			prop && ss.map(val, prop);
+			ss.makeSig(val).tap(function(v) {
+				doLater(function() {
+					//console.log(me.toString() + ': setting '+key+' to '+v)
+					prop(v);
+				});
+			});
 		}
 	});
 	return this;
 }
 
 
-
 Relm.defineProp = function(name, fn) {
 	var conf = _.fn(fn)();
-	return Relm.prototype[name] = propFn(conf.getter, conf.setter);
+	return Relm.$$slots[name] = Relm.prototype[name] = makeSlot(conf.getter, conf.setter);
 }
 
 Relm.propAlias = function(alias, domProp) {
 	Relm.defineProp(alias, elmProp(domProp));
 }
+
+Relm.propAlias('value', 'value');
+Relm.propAlias('text', 'textContent');
+Relm.propAlias('html', 'innerHTML');
+Relm.propAlias('checked', 'checked');
+Relm.propAlias('disabled', 'disabled');
+Relm.propAlias('readOnly', 'readOnly');
 
 Relm.simpleProp = function (name, setter) {
 	var priv = '@@'+name;
@@ -162,13 +210,6 @@ Relm.simpleProp = function (name, setter) {
 	});
 }
 
-Relm.propAlias('value', 'value');
-Relm.propAlias('text', 'textContent');
-Relm.propAlias('html', 'innerHTML');
-Relm.propAlias('checked', 'checked');
-Relm.propAlias('disabled', 'disabled');
-Relm.propAlias('readOnly', 'readOnly');
-
 Relm.simpleProp('visible', function(v) {
 		!v ? this.el.style.display = 'none' : 
 			this.el.style.removeProperty('display'); 
@@ -181,11 +222,16 @@ Relm.simpleProp('enabled', function(v) {
 Relm.simpleProp('css', function( val ) {
 	var classList = this.el.classList;
 	this.$$css && _.each( this.$$css, classList.remove.bind(classList) );
-	this.$$css = 	_.isObj(val)	? _.filter( Object.keys(val), _.objGetter(val) ) :
+	this.$$css = 	_.isObj(val)	? _.filter( Object.keys(val), isTrue) :
 				_.isStr(val)	? val.match(/\S+/g) :
 				_.isArray(val)	? val :
 				/* otherwise 	*/[];
 	_.each( this.$$css, classList.add.bind(classList) );
+	
+	function isTrue(key) {
+		var kval = val[key];
+		return kval && kval !== ss.neant; 
+	}
 })
 
 Relm.simpleProp('style', function(st) {
@@ -207,11 +253,14 @@ Relm.simpleProp('attr', function(v) {
 });
 
 Relm.simpleProp('focus', function(v) {
-	v ? this.el.focus() : this.el.blur();
+	var el = this.el;
+	setTimeout(function() {
+		v ? el.focus() : el.blur();
+	}, 0);
 });
 
 Relm.defineProp('children', function() {
-	var docf /*= document.createDocumentFragment()*/;
+	var docf = document.createDocumentFragment();
 	return {
 		getter: function() { return this.$$children || []; },
 		setter: function(elms) {
@@ -247,6 +296,7 @@ Relm.prototype.signal = function ( selector/* opt */, event ) {
 		_.each(events, function(ev) {
 			me.on( selector, ev, sig.$$emit.bind(sig) ); 
 		});
+		sig.name((selector ? selector + ':' : '') + event);
 		this.$$signals[event] = sig;
 	}
 	return sig;
@@ -276,7 +326,7 @@ _.each(	[	['value'		,'change'	,'value'],
 		var name = opt[0], defaultEvent = opt[1], prop = opt[2];
 		Relm.prototype['$'+name] = function( event ) {
 			var getter = this.getter(prop);
-			return ss.def( getter(), [this.signal( null, event || defaultEvent ), getter] );  
+			return ss.def( getter(), [this.signal( null, event || defaultEvent ), getter] ).name(this.toString() + ':' + name);  
 		} 
 	});
 	
@@ -288,7 +338,7 @@ Relm.prototype.$keyChar = function (ch) {
 };
 
 Relm.prototype.$keyCode = function (code) { 
-	var sig = this.$keypress().map('.keyCode');
+	var sig = this.$keydown().map('.keyCode');
 	return arguments.length ? sig.filter(code) : sig;
 };
 
@@ -313,15 +363,37 @@ Relm.prototype.template = function(selector) {
 	}
 }
 
-function tmap(tfn, src, trackByProp) {
-	var cache = {};
-	var getKey = trackByProp ? _.propGetter(trackByProp) : JSON.stringify;
+function ArrayChange(type, data) {
+	this.type = type;
+	this.data = data;
+}
+_.each(['add', 'remove', 'update', 'insert', 'reposition'], function(entry) {
+   ArrayChange[entry] = entry;
+});
+
+
+function Map() {
+	this.keys = [],
+	this.vals = [];
+}
+
+Map.prototype.set = function (key, val) {
+	this.keys.push(key);
+	this.vals.push(val);
+	return val;
+}
+Map.prototype.get = function (key) {
+	var idx = this.keys.indexOf(key);
+	return idx >= 0 ? this.vals[idx] : undefined;
+}
+
+function tmap(tfn, src) {
+	var cache = new Map();
 	return src.map(sync);
-	
+
 	function sync(arr) {
 		return _.map( arr, function(obj) {
-			var key = getKey(obj);
-			return cache[key] || (cache[key] = tfn(obj));
+			return cache.get(obj) || cache.set(obj, tfn(obj) );
 		});	
 	}
 }

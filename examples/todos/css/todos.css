@@ -1,3 +1,7 @@
 .template {
 	display: none !important;
 }
+
+.hide {
+	display: none !important;
+}

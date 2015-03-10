@@ -32,6 +32,10 @@ ss.now = function now(val) {
     return s;
 };
 
+ss.const = function(val) {
+	return signal(val);
+}
+
 ss.makeSig = function(s) {	
 	return isSig( s ) ? s : signal(s);
 }
@@ -41,7 +45,6 @@ ss.collect = function collect( sources, cb ) {
 	res.sources = _.map( sources, ss.makeSig);
 	res.startValues = _.map( res.sources, _.propGetter('$$currentValue'), sample );
 	res.handlers = _.map( res.sources, handler );
-	res.log = '[' + _.map( res.sources, function(s) { return s.$$log }).join(', ') + ']';	
 	res.activate = _.bindl(_.each, res.sources, connect );
 	res.deactivate = _.bindl(_.each, res.sources, disconnect );
 	return res;
@@ -62,7 +65,6 @@ ss.combine = function combine( sources, fn, discr ) {
 	sources = _.map( sources, ss.makeSig );
 	var collection = ss.collect( sources, handle );
 	var sig = signal( !discr ? fn( collection.startValues, null, -1 ) : neant );
-	sig.name(collection.log);
 	
 	sig.activate = function() {
 		collection.activate();
@@ -135,7 +137,7 @@ Function.prototype.lift = function() {
 }
 
 ss.filter = function filter(sig, test) {
-	test = _.fn( test, _.eq(test) );
+	test = _.fn( test, test instanceof RegExp ? test.exec.bind(test) : _.eq(test) );
 		
 	return ss.combine( [sig], function( values, src, idx ) {
 		if ( !src || !test(values[0]) ) return neant;
@@ -153,10 +155,12 @@ ss.def = function def( start, reactions /*, ... */ ) {
 			return s[0];
 		});
 
-	return ss.combine( sigs, function( values, src, idx ) {
+	var res = ss.combine( sigs, function( values, src, idx ) {
 		return !src ?	start :  
 						( current = handlers[idx](values[idx], current) )
 	});
+	res.name('def('+start+', ' + _.map(sigs, _.propGetter('$$name')) + ')' );
+	return res;
 };
 
 ss.bState = function bstate(start, evOn, evOff) {
@@ -179,17 +183,55 @@ ss.and = ss.lift(_.and);
 ss.or  = ss.lift(_.or);
 ss.if = ss.lift(_.if);
 
+Signal.prototype.until = function (event) {
+	if(this.$$discrete)  throw Error('Until must be called on a conitnuous signal');
+	var curSrc = this,
+		sig = new Signal(this.$$currentValue),
+		emit = sig.$$emit.bind(sig);
+	
+	curSrc.on(emit);
+	event.on(setSig);
+	return sig;
+	
+	function setSig(src) {
+		src = ss.makeSig(src);
+		if(src.$$discrete)
+			throw Error('Until must swtich to a conitnuous signal');
+		curSrc.off(emit);
+		curSrc = src;
+		curSrc.on(emit);
+		event.off(setSig);
+		sig.$$currentValue = curSrc.$$currentValue;
+		sig.$$emit(sig.$$currentValue);
+	}
+}
+
+Signal.prototype.switch = function(ev) {
+	var curSrc,
+		sig = new Signal(this.$$currentValue),
+		emit = sig.$$emit.bind(sig);
+	
+	ev.tap(setSig);
+	setSig(this, true);
+	return sig;
+	
+	function setSig(src, isStart) {
+		curSrc && curSrc.tapOff(emit);
+		curSrc = ss.makeSig(src).tap(emit);
+		!isStart && emit(src.$$currentValue);	
+	}
+}
 
 Signal.prototype.map = function() {
-	return ss.map( this, _.template.apply( null, _.slice(arguments) ) )
+	return ss.map( this, _.pluck.apply( null, _.slice(arguments) ) ).name(this.$$name+".map(fn)");
 };
 
 Signal.prototype.val = function (val) {
-	return ss.map( this, _.val(val) );
+	return ss.map( this, _.val(val) ).name(this.$$name+'.val('+val+')');
 };
 
 Signal.prototype.fold = function(start, fn) {
-	return ss.def( start, [this, fn] );
+	return ss.def( start, [this, fn] ).name(this.$$name+'.fold('+start+', fn)');
 };
 
 Signal.prototype.fold0 = function(fn) {
@@ -197,19 +239,19 @@ Signal.prototype.fold0 = function(fn) {
 };
 
 Signal.prototype.filter = function (test) {
-	return ss.filter( this, test );
+	return ss.filter( this, test ).name(this.$$name+'.filter()');
 };
 
 Signal.prototype.not = function() {
-	return ss.map(this, function(v) { return !v });
+	return ss.map(this, function(v) { return !v }).name(this.$$name+'.not()');
 };
 
 Signal.prototype.and = function() {
-	return ss.and.call(null, _.slice(arguments));
+	return ss.and.apply(null, [this].concat(_.slice(arguments)));
 };
 
 Signal.prototype.merge = function() {
-	return ss.merge.call(null, _.slice(arguments));
+	return ss.merge.apply(null, [this].concat(_.slice(arguments)));
 };
 
 Signal.prototype.counter = function() {
@@ -224,7 +266,7 @@ Signal.prototype.keep = function(start) {
 
 _.each( ['eq', 'notEq', 'gt', 'gte', 'lt', 'lte'], function( key ) {
 	var fpred = _[key],
-		pred = function(me, other) { return fpred(me)(other) };
+		pred = function(me, other) { return fpred(other)(me) };
 	Signal.prototype[key] = function(sig) {
 		sig = ss.makeSig(sig);
 	    return ss.map( this, sig, pred);
@@ -236,15 +278,6 @@ _.each( ['eq', 'notEq', 'gt', 'gte', 'lt', 'lte'], function( key ) {
 	    return this[key](sig).filter(_.isTrue);
 	};
 });
-
-
-
-Signal.prototype.tap = function(proc) {
-	return ss.map(this, function(v) {
-		proc(v);
-		return v;
-	})
-}
 
 Signal.prototype.printDeps = function(level) {
 	level = level || 0;

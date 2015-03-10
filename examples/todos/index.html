@@ -23,11 +23,11 @@
 							<label class="label" ></label>
 							<button class="destroy" ></button>
 						</div>
-						<input class="edit">
+						<input class="edit" autofocus>
 					</li>
 				</ul>
 			</section>
-			<footer id="footer">
+			<footer id="footer" class="hide">
 				<span id="todo-count">
 					<strong id="remainingCount">0</strong>
 					<span id="remainingLabel"></span> left
@@ -51,9 +51,10 @@
 			<p>Written by <a href="https://github.com/ashish01/knockoutjs-todos">Ashish Sharma</a> and <a href="http://knockmeout.net">Ryan Niemeyer</a></p>
 			<p>Part of <a href="http://todomvc.com">TodoMVC</a></p>
 		</footer>
-		<script src="../../signal.js"></script>
-		<script src="js/todosCtrl.js"></script>
 		
+		<script src="../../build/signal.js"></script>
+		<script src="js/todosModel.js"></script>
+		<script src="js/todosCtrl.js"></script>
 		<script type="text/javascript">
 			todoApp.call(ss.$('#todoapp'));
 		</script>

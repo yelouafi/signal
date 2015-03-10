@@ -45,18 +45,18 @@ su.timer = function timer ( prec, startEvOrDelay, stopEvOrTicks  ) {
 };
 
 su.clock = function clock( start, stop ) {
-	return ss.timer( 1000, start, stop ).map( function( ms ) { return new Date(ms); } )
+	return su.timer( 1000, start, stop ).map( function( ms ) { return new Date(ms); } )
 };
 
 su.seconds = function seconds( start, stop ) {
-	return ss.timer( 1000, start, stop );
+	return su.timer( 1000, start, stop );
 };
 
 su.fromArray = function signalFromArray(array, interval, delay) {
 	return interval ? withInterval() : withoutInterval();
 
 	function withInterval() {
-		return ss.timer(interval, delay || 0, array.length).map(_.objGetter(array));
+		return su.timer(interval, delay || 0, array.length).map(_.objGetter(array));
 	}
 	
 	function withoutInterval() {
@@ -67,5 +67,6 @@ su.fromArray = function signalFromArray(array, interval, delay) {
 		return sig;
 	}
 };
+
 
 module.exports = su;

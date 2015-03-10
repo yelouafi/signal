@@ -32,11 +32,11 @@
 		<p id="alarm">Alarm <span  id="alarmText"></span></p>
 	</p>
 </div>
-<script src="../signal.js"></script>
+<script src="../../build/signal.js"></script>
 
 <script>
 
-var ss = window.ss, $ = ss.$;
+var ss = window.ss, su = window.su, $ = ss.$;
 		
 function watchdog( delay, tick, order, done ) {
 	
@@ -44,9 +44,8 @@ function watchdog( delay, tick, order, done ) {
 		-1,				// start value
 		[order, 0],		// on order start counter
 		[done, -1],		// on done reset counter to -1
-		[tick, function(v) { 
-			var cnt = counter();
-			return cnt > -1 ? cnt + 1 : -1;
+		[tick, function(v, prev) { 
+			return prev > -1 ? prev + 1 : -1;
 		}]				// on each tick increment counter if we are inside an order	
 	);
 	
@@ -57,7 +56,7 @@ function watchdog( delay, tick, order, done ) {
 	};
 }
 
-var tick 	= ss.seconds(),
+var tick 	= su.seconds(),
 	order 	= $('#order').$click(),
 	done 	= $('#done').$click(),
 	wd = watchdog( 5, tick, order, done );
@@ -70,7 +69,7 @@ $('#alarmText', {
 	text: ss.if( wd.alarm, wd.counter, 'NA' )
 });
 $('#alarm', { 
-	css: { blink: wd.alarm }
+	css: ss.obj({ blink: wd.alarm })
 });
 
 

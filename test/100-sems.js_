@@ -1,0 +1,166 @@
+var frp = require("../model/sem.js"),
+    assert = require("assert");
+
+describe('frp', function() {
+   
+    function EventHelper() { this.slots = []; }
+    EventHelper.prototype.on = function(slot) { this.slots.push(slot); }
+    EventHelper.prototype.emit = function (event) { 
+        for (var i = 0; i < this.slots.length; i++) {
+    	    this.slots[i](event);
+    	}
+    };
+    
+    var colors = [
+        'red', 'green', 'blue', 'yellow', 'white', 'cyan', 'black'
+    ];
+    
+    function evSrc() {
+        var events = [
+            { type: 'press', data: '' },
+            { type: 'move', data: '' },
+            { type: 'up', data: '' },
+            { type: 'click', data: '' },
+            { type: 'keyDown', data: 'ctrl' },
+            { type: 'keyUp', data: 'ctrl' }
+        ],
+        emitter = new EventHelper();
+        var start = 0;
+        emitter.send = function (nb) {
+            var end = start + nb;
+            while (start < end) {
+                emitter.emit(events[start]);
+                start++;
+            }
+            start = end;
+        }
+        return emitter;
+    }
+    
+    describe('basic Behavior', function() {
+        it('should return time behavior value', function() {
+            var r = frp();
+            assert.equal(r.time(0), 0);
+            assert.equal(r.time(20), 20);
+        });
+       
+        it('should return const behavior', function() {
+            var r = frp(),
+                c10 = r.val(10);
+                
+            assert.equal(c10(0), 10);
+            assert.equal(c10(20), 10);
+        });
+       
+        it('should return first event after time t', function() {
+            var r = frp(),
+                src = evSrc(),
+                move = r.on('move', 0),
+                up = r.on('up'),
+                keyUp = r.on('keyUp').map(function(v) {
+                    return this.type + ': ' + v + ' at ' + this.t;
+                });
+                
+            r.start(src);
+
+            src.send(2); // t = 2
+            var fstMove = move(2);
+            assert.deepEqual([fstMove.type, fstMove.t], ['move', 1.5]);
+            assert.equal(up(2), r.future);
+            
+            src.send(1); // t = 3
+            assert.deepEqual([up(3).type, up(3).t], ['up', 2.5]);
+            
+            src.send(1); // t = 4
+            assert.equal(move(4), fstMove);
+            assert.deepEqual(up(4), r.future);
+            
+            src.send(2); // t = 6
+            assert.equal(keyUp(6).val, 'keyUp: ctrl at 6.5');
+        });
+       
+        it('should return the correct behavior value in time t', function() {
+            var r = frp(),
+                src = evSrc();
+            
+            var colorB = r.beh(function(t) {
+                return colors[t];
+            });
+            
+            r.start(src);
+            src.send(6);
+            
+            for(var i=1; i<=6; i++) {
+                assert.equal(colorB(i), colors[i]);
+            }
+        
+        });
+        
+        it('should return the value of a behavior until occurence of an event', function() {
+            var r = frp(),
+                src = evSrc();
+            
+            var colorB = r.beh(function(t) {
+                return colors[t];
+            });
+            
+            assert.equal( r.on('up', 0)(0), r.future)
+            
+            var c = r.val('orange').until( r.on('up', 0).map(colorB) );
+            
+            r.start(src);
+            assert.equal( c(0), 'orange' );
+            
+            src.send(2); // t = 2
+            assert.equal( c(2), 'orange' );
+            
+            for(var i=3; i<=6; i++) {
+                src.send(1); // t = i
+                assert.equal( c(i), colorB(i) );   
+            }
+        
+        });
+        
+        it('should cycle between ', function() {
+            var r = frp(),
+                src = evSrc();
+                
+            function cycle(c1, c2, t0) {
+                return c1.until( 
+                    r.on('lbp', t0).map( function(v, t) {
+                        return cycle(c2, c1, t);
+                    })
+                );    
+            }
+            
+            var c = cycle(r.val('orange'), r.val('blue'), 0);
+            
+            r.start(src); // t = 0
+            assert.equal( c(0), 'orange' );
+            console.log('0')
+            
+            src.emit({type: 'press', data: ''}); // t = 1
+            assert.equal( c(1), 'orange' );
+            console.log('1')
+            
+            src.emit({type: 'lbp', data: ''}); // t = 2
+            //console.log(r.$$events)
+            assert.equal( c(2), 'blue' );
+            console.log('2')
+            
+            src.emit({type: 'press', data: ''}); // t = 3
+            assert.equal( c(3), 'blue' );
+            console.log('3')
+            
+            src.emit({type: 'lbp', data: ''}); // t = 4
+            //console.log(r.$$events)
+            assert.equal( c(4), 'orange' );
+            console.log('4')
+            
+            
+        });
+       
+       
+    });
+    
+});

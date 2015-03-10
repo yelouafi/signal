@@ -14,11 +14,10 @@ EventHelper.prototype.off = function(slot) {
     _.remove(this.slots, slot); 
 };
 
-EventHelper.prototype.emit = function (data) { 
-	_.each( 
-	    this.slots, 
-	    _.callw( data )
-    ); 
+EventHelper.prototype.emit = function (data) {
+	for(var i = 0, len = this.slots.length; i < len; i++ ) {
+		this.slots[i](data);
+	}
 };
 
 
@@ -34,6 +33,7 @@ function Signal() {
 	this.$$name = 'anonym';
 	this.$$sources = [];
 	this.$$deps = [];
+	this.$$todos = [];
 }
 
 
@@ -44,8 +44,15 @@ Signal.prototype.name = function(name) {
 }
 
 Signal.prototype.log = function(log) {
-    this.$$log = arguments.length ? log : true;
+    this.$$name = log;
+    this.$$log = true;
     return this;
+}
+
+Signal.prototype.$$execTodos = function(v) {
+    for(var i = 0, len = this.$$todos.length; i < len; i++) {
+    	this.$$todos[i](v);
+    }
 }
 
 Signal.prototype.$$emit = function(val) {
@@ -54,16 +61,32 @@ Signal.prototype.$$emit = function(val) {
 	if( !this.$$discrete )
 		this.$$currentValue = val;
 	this.$$valueEvent.emit(val);
+	this.$$execTodos(val);
 }
 
 Signal.prototype.on = function(listener) {
     this.$$valueEvent.on(listener);
+    return this;
 }
 
 Signal.prototype.off = function(listener) {
     this.$$valueEvent.off(listener);
+    return this;
 }
 
-Signal.prototype.activate = Signal.prototype.deactivate = function() {}
+Signal.prototype.tap = function(proc) {
+    _.add(this.$$todos, proc, true);
+    if(this.$$currentValue !== neant)
+        proc(this.$$currentValue);
+    return this;
+}
+
+Signal.prototype.tapOff = function(proc) {
+    _.remove(this.$$todos, proc);
+    return this;
+}
+
+Signal.prototype.activate = function() {}
+Signal.prototype.deactivate = function() {}
 
 module.exports = Signal;

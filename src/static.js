@@ -209,13 +209,13 @@ _.scanner = function( seed, fn ) {
 }
 
 /*
-template(fn, args...) 										-> fn(args..., v)
-template('.*.prop') 										-> v[*]['prop']
-template('.*.meth(), args...') 							-> v[*]['meth'](args...)
-template(['.*.prop1, '.*.meth()'], args...) 				-> [ v[*]['prop'], v[*]['meth'](args...) ]
-template({prop1: '.*.prop', prop2: '.*.meth()'}, args...)	-> { prop1: v[*]['prop'], prop2: v[*]['meth'](args...) }
+pluck(fn, args...) 										-> fn(args..., v)
+pluck('.*.prop') 										-> v[*]['prop']
+pluck('.*.meth(), args...') 							-> v[*]['meth'](args...)
+pluck(['.*.prop1, '.*.meth()'], args...) 				-> [ v[*]['prop'], v[*]['meth'](args...) ]
+pluck({prop1: '.*.prop', prop2: '.*.meth()'}, args...)	-> { prop1: v[*]['prop'], prop2: v[*]['meth'](args...) }
 */
-_.template = function( config, args /*...*/ ) {
+_.pluck = function( config, args ) {
 	args = _.slice(arguments, 1);
 	var tpl = makeGetter(config);
 	if( _.isArray(tpl) )

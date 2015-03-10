@@ -6,73 +6,110 @@ var ENTER_KEY = 13,
 
 
 function todoApp() {
-    var me = this,
-        inputValue	= me.$('#new-todo').getter('value'),
-    	toggleAll	= me.$('#toggle-all').$checked(),
-    	inputEnter	= me.$('#new-todo').$keyCode(ENTER_KEY),
-    	filter		= ss.def( 'all',
-    	    [ me.$('#filters').$click('a')    , _.fapply('.target.dataset.filter') ]),
-    	archive		= me.$('#clear-completed').$click(),
-    	addTodo = inputEnter.filter(function() { return inputValue().trim()})
-    						.map(function() {
-    						    return { id: ++uuid, title: inputValue() };
-    						}),
-    	removeTodo = me.signal('li', '$removeTodo').map('.detail.data'),
-    	toggleTodo = me.signal('li', '$toggleTodo').map('.detail.data').log('toggle todo'),
-        mTodos = todosModel([]),
-        cTodos = ss.def([],
-            [addTodo, mTodos.addTodo],
-            [removeTodo, mTodos.removeTodo],
-            [archive, mTodos.clearCompletedTodos],
-            [toggleAll, mTodos.toggleAll]
-        ),
-        
-        
-    me.$('#main', { visible: todosLength });
-    me.$('#footer', 	{ visible: todosLength });
-    me.$('#remainingCount', { text: activeCount });
-    me.$('#remainingLabel', { 
-    	text: activeCount.map(function(count) { return count === 1 ? 'item' : 'items' })
-    });
-    me.$('#completedCount', { text: completedCount });
-    me.$('#new-todo', {
-    	value: inputEnter.val('')
-    });
-    me.$('#todo-list', { 
-    	children: cTodos.map(function(mTodos) {
-    	    return _.map(mTodos, _.propGetter('$$relm'));
-    	})
-    });
     
+    var me = this,
+        ttodo = me.template('#ttodo'),
+        inputValue	    = me.$('#new-todo').getter('value'),
+    	toggleAll	    = me.$('#toggle-all').$checked(),
+    	inputEnter	    = me.$('#new-todo').$keyCode(ENTER_KEY),
+    	filter		    = me.$('#filters').$click().map('.target.dataset.filter').keep('all'),
+    	archive		    = me.$('#clear-completed').$click(),
+    	addTodo         = inputEnter.filter(/\S+/).map(newTodo),
+    	removeTodo      = me.signal('li', '$removeTodo').map('.detail.data'),
+    	updateTodo      = me.signal('li', '$updateTodo').map('.detail.data'),
+    	startEditing    = me.signal('li', '$startEditing').map('.detail.data'),
+    	cancelEditing   = me.signal('li', '$cancelEditing').map('.detail.data'),
+    	saveEditing     = me.signal('li', '$saveEditing').map('.detail.data'),
+    	editingTodo     = ss.def(0, [startEditing, _.id], [cancelEditing.merge(saveEditing), 0]),
+    	
+        mTodos          = todosModel([]),
+        cTodos          = ss.def([],
+                            [addTodo, mTodos.addTodo],
+                            [removeTodo, mTodos.removeTodo],
+                            [updateTodo, mTodos.updateTodo],
+                            [archive, mTodos.clearCompletedTodos],
+                            [toggleAll, mTodos.toggleAll]
+                        ).name('cTodos'),
+        filteredTodos   = ss.map(filter, cTodos, mTodos.filteredTodos),
+        activeCount     = cTodos.map(mTodos.activeCount),
+        completedCount  = cTodos.map(mTodos.completedCount),
+        length          = cTodos.map('.length');
+    
+    //Dom config
+    me.$('#main',{ visible: length });
+    me.$('#footer', {
+        css: ss.obj({ hide: length.not() }) 
+    });
+    me.$('#toggle-all', { checked: completedCount.eq(0) });
+    me.$('#remainingCount', { text: activeCount });
+    me.$('#remainingLabel', { text: activeCount.map(itemsLabel) });
+    me.$('#completedCount', { text: completedCount });
+    me.$('#new-todo', { value: inputEnter.val('') });
+    me.$('#todo-list', { children: $.tmap(todoCtrl, filteredTodos, 'id') });
     me.$$('#filters a', function() {
         var me = this;
     	$(this, {
-    		css: { selected: filter.eq(me.data('filter')) }	
+    		css: ss.obj({ selected: filter.eq(me.data('filter')) })	
     	});
     });
     
-    function todoActive(t) { 
-        return !t.completed;
-    }
-    function todoCompleted(t) {
-        return t.completed;
+    function newTodo() {
+        return { id: ++uuid, title: inputValue().trim() };
     }
     
-    var ttodo = me.template('#ttodo');
+    function itemsLabel(count) {
+        return count === 1 ? 'item' : 'items'
+    }
+    
+    
     function todoCtrl(data) {
-        var me = ttodo();
-        var completed = me.$('.toggle').$checked().merge(toggleAll);
+        var me          = ttodo(),
+            label       = me.$('.label'),
+            toggle      = me.$('.toggle'),
+            destroy     = me.$('.destroy'),
+            edit        = me.$('.edit'),
+            
+            editStart   = label.$dblclick(),
+            editSave    = edit.$keyCode(ENTER_KEY),
+            editCancel  = edit.$keyCode(ESC_KEY),
+            
+            todoC       = {
+                    	    id: data.id,
+                    	    title: ss.def(data.title,
+                    	        [editSave, edit.prop('value')],
+                    	        [editCancel, function(cur, prev) { return prev; }]
+                    	    ),
+                    	    completed: toggle.$checked().merge(toggleAll)
+                        },
+            editing     = editingTodo.eq(data.id),
+            notEditing  = editing.not();
+        
         $(me, {
-        	css: { 
-        	    completed: completed, 
-        	    editing: false
-        	},
-        	$removeTodo: me.$('.destroy').$click().val(data.id),
-        	$toggle: me.$('.toggle').$checked()
+        	css: ss.obj({ 
+        	    completed: todoC.completed, 
+        	    editing: editing
+        	}),
+        	$removeTodo     : destroy.$click().val(data.id),
+        	$updateTodo     : ss.obj(todoC),
+        	$startEditing   : editStart.val(data.id),
+        	$saveEditing    : editSave.val(data.id),
+        	$cancelEditing  : editCancel.merge(edit.$blur()).val(data.id)
+        	
         });
         
-        me.$('.label', { text: data.title });
-        me.$('.toggle', { checked: toggleAll });
+        $(label, { 
+            text: todoC.title ,
+            visible: notEditing
+        });
+        $(toggle, {
+            checked: toggleAll,
+            visible: notEditing
+        });
+        $(edit, { 
+            visible: editing,
+            value: todoC.title,
+            focus: editStart
+        });
         
         return me;
     }

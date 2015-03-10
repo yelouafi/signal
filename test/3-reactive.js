@@ -445,4 +445,91 @@ describe('Signal.prototype', function() {
         });
     });
     
+    describe('#until()', function() {
+        it('should swtiches to the value of the first event occurence', function(){
+            var res = null,
+                s1 = ss.signal(1),
+                s2 = ss.signal(100),
+                ev = ss.signal(),
+                sig = s1.until( ev );
+                
+            sig.on(function(v) {
+                res = v;
+            });
+            
+            assert.equal(sig.$$currentValue, 1);
+            
+            s1.$$emit(2);
+            assert.equal(sig.$$currentValue, 2);
+            assert.equal(res, 2);
+            
+            ev.$$emit(s2);
+            assert.equal(sig.$$currentValue, 100);
+            assert.equal(res, 100);
+            
+            s2.$$emit(200);
+            assert.equal(sig.$$currentValue, 200);
+            assert.equal(res, 200);
+            
+            s1.$$emit(3);
+            assert.equal(sig.$$currentValue, 200);
+            assert.equal(res, 200);
+            
+            ev.$$emit(ss.signal(1000));
+            assert.equal(sig.$$currentValue, 200);
+            assert.equal(res, 200);
+            
+        });
+    });
+    
+    describe('#switch()', function() {
+        it('should swtiches to the value of the event occurrence', function(){
+            var res,
+                s1 = ss.signal(1), 
+                s2 = ss.signal(100),
+                s3 = ss.signal(1000)
+                ev = ss.signal(),
+                sig = s1.switch( ev );
+                
+            sig.on(function(v) {
+                res = v;
+            });
+            
+            assert.equal(sig.$$currentValue, 1);
+            
+            s1.$$emit(2);
+            assert.equal(sig.$$currentValue, 2);
+            assert.equal(res, 2);
+            
+            ev.$$emit(s2);
+            assert.equal(sig.$$currentValue, 100);
+            assert.equal(res, 100);
+            
+            s2.$$emit(200);
+            assert.equal(sig.$$currentValue, 200);
+            assert.equal(res, 200);
+            
+            s1.$$emit(3);
+            assert.equal(sig.$$currentValue, 200);
+            assert.equal(res, 200);
+            
+            ev.$$emit(s3);
+            assert.equal(sig.$$currentValue, 1000);
+            assert.equal(res, 1000);
+            
+            s3.$$emit(2000);
+            assert.equal(sig.$$currentValue, 2000);
+            assert.equal(res, 2000);
+            
+            s1.$$emit(3);
+            assert.equal(sig.$$currentValue, 2000);
+            assert.equal(res, 2000);
+            
+            s2.$$emit(300);
+            assert.equal(sig.$$currentValue, 2000);
+            assert.equal(res, 2000);
+            
+        });
+    })
+    
 });

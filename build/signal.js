@@ -36,11 +36,34 @@ function ajaxSig( req ) {
 }
 
 ss.ajax = ajaxSig;
-},{"../reactive.js":5,"../static.js":7}],2:[function(require,module,exports){
+},{"../reactive.js":5,"../static.js":8}],2:[function(require,module,exports){
 var _ = require('../static.js');
 var ss = require('../reactive.js'),
 	signal = ss.signal;
 
+ var raf = window.requestAnimationFrame
+    	|| window.webkitRequestAnimationFrame
+    	|| window.mozRequestAnimationFrame
+    	|| window.msRequestAnimationFrame
+    	|| function(cb) { return window.setTimeout(cb, 0); };
+
+var jobQueue = [];
+function runQueue() {
+	//console.log('running dom update queue; jobs: ', jobQueue.length);
+	try {
+		_.each(jobQueue, function(job) {
+			job();
+		});	
+	} finally {
+		jobQueue = [];
+	}
+}
+function doLater(job) {
+	if( !jobQueue.length ) {
+		raf(runQueue);
+	}
+	jobQueue.push(job);
+}
 
 var elcache = {}, uuid = 0;
 
@@ -110,19 +133,24 @@ function elmProp(prop) {
 			return this.el[prop];
 		},
 		setter: function(val) {
-			this.el[prop] = val;
+			var prev = this.el[prop];
+			if(prev !== val)
+				this.el[prop] = val;
 			return this;
 		}
 	}
 }
 
-function propFn(getter, setter) {
-	return function(val) {
+function makeSlot(getter, setter) {
+	function slot(val) {
 		if(arguments.length  < 1)
 			return getter.call(this);
 		setter.call(this, val);
 		return this;
 	}
+	slot.getter = getter;
+	slot.setter = setter;
+	return slot;
 }
 
 function Relm(el) {
@@ -130,7 +158,12 @@ function Relm(el) {
 	this.on = eventDelegate(this.el);
 	this.$$signals = {};
 	this.$$children = [];
-	this.$$eprops = {};
+	this.$$slots = {};
+}
+
+Relm.prototype.toString = function () {
+	var el = this.el;
+	return el.nodeName.toLowerCase() + (el.id ? '#' + el.id : '') + '.' + el.className;
 }
 
 Relm.prototype.matches = function (selector) {
@@ -149,17 +182,21 @@ Relm.prototype.data = function(key) {
 	return this.el.dataset[key];
 }
 
+Relm.$$slots = {};
 Relm.prototype.prop = function(prop) {
-	var slot = this[prop];
-	return slot ? slot.bind(this) : (
-		this.$$eprops[prop] || ( this.$$eprops[prop] = propFn(elmProp(prop)).bind(this) )
-	);
+	var me = this;
+	return this.$$slots[prop] || (this.$$slots[prop] = bindSlot(prop));
+	
+	function bindSlot(p) {
+		return (Relm.$$slots[p] || makeSlot( elmProp(p) )).bind(me);
+	}
 }
 
 Relm.prototype.getter = function(prop) {
+	var pf = this.prop(prop);
 	return function() {
-		return this.prop(prop)();
-	}.bind(this);
+		return pf();
+	}
 }
 
 Relm.prototype.config = function(conf) {
@@ -171,22 +208,33 @@ Relm.prototype.config = function(conf) {
 			me.domSignal(key, val);	
 		} else {
 			var prop = me.prop(key);
-			prop && ss.map(val, prop);
+			ss.makeSig(val).tap(function(v) {
+				doLater(function() {
+					//console.log(me.toString() + ': setting '+key+' to '+v)
+					prop(v);
+				});
+			});
 		}
 	});
 	return this;
 }
 
 
-
 Relm.defineProp = function(name, fn) {
 	var conf = _.fn(fn)();
-	return Relm.prototype[name] = propFn(conf.getter, conf.setter);
+	return Relm.$$slots[name] = Relm.prototype[name] = makeSlot(conf.getter, conf.setter);
 }
 
 Relm.propAlias = function(alias, domProp) {
 	Relm.defineProp(alias, elmProp(domProp));
 }
+
+Relm.propAlias('value', 'value');
+Relm.propAlias('text', 'textContent');
+Relm.propAlias('html', 'innerHTML');
+Relm.propAlias('checked', 'checked');
+Relm.propAlias('disabled', 'disabled');
+Relm.propAlias('readOnly', 'readOnly');
 
 Relm.simpleProp = function (name, setter) {
 	var priv = '@@'+name;
@@ -201,13 +249,6 @@ Relm.simpleProp = function (name, setter) {
 	});
 }
 
-Relm.propAlias('value', 'value');
-Relm.propAlias('text', 'textContent');
-Relm.propAlias('html', 'innerHTML');
-Relm.propAlias('checked', 'checked');
-Relm.propAlias('disabled', 'disabled');
-Relm.propAlias('readOnly', 'readOnly');
-
 Relm.simpleProp('visible', function(v) {
 		!v ? this.el.style.display = 'none' : 
 			this.el.style.removeProperty('display'); 
@@ -220,11 +261,16 @@ Relm.simpleProp('enabled', function(v) {
 Relm.simpleProp('css', function( val ) {
 	var classList = this.el.classList;
 	this.$$css && _.each( this.$$css, classList.remove.bind(classList) );
-	this.$$css = 	_.isObj(val)	? _.filter( Object.keys(val), _.objGetter(val) ) :
+	this.$$css = 	_.isObj(val)	? _.filter( Object.keys(val), isTrue) :
 				_.isStr(val)	? val.match(/\S+/g) :
 				_.isArray(val)	? val :
 				/* otherwise 	*/[];
 	_.each( this.$$css, classList.add.bind(classList) );
+	
+	function isTrue(key) {
+		var kval = val[key];
+		return kval && kval !== ss.neant; 
+	}
 })
 
 Relm.simpleProp('style', function(st) {
@@ -246,11 +292,14 @@ Relm.simpleProp('attr', function(v) {
 });
 
 Relm.simpleProp('focus', function(v) {
-	v ? this.el.focus() : this.el.blur();
+	var el = this.el;
+	setTimeout(function() {
+		v ? el.focus() : el.blur();
+	}, 0);
 });
 
 Relm.defineProp('children', function() {
-	var docf /*= document.createDocumentFragment()*/;
+	var docf = document.createDocumentFragment();
 	return {
 		getter: function() { return this.$$children || []; },
 		setter: function(elms) {
@@ -286,6 +335,7 @@ Relm.prototype.signal = function ( selector/* opt */, event ) {
 		_.each(events, function(ev) {
 			me.on( selector, ev, sig.$$emit.bind(sig) ); 
 		});
+		sig.name((selector ? selector + ':' : '') + event);
 		this.$$signals[event] = sig;
 	}
 	return sig;
@@ -315,7 +365,7 @@ _.each(	[	['value'		,'change'	,'value'],
 		var name = opt[0], defaultEvent = opt[1], prop = opt[2];
 		Relm.prototype['$'+name] = function( event ) {
 			var getter = this.getter(prop);
-			return ss.def( getter(), [this.signal( null, event || defaultEvent ), getter] );  
+			return ss.def( getter(), [this.signal( null, event || defaultEvent ), getter] ).name(this.toString() + ':' + name);  
 		} 
 	});
 	
@@ -327,7 +377,7 @@ Relm.prototype.$keyChar = function (ch) {
 };
 
 Relm.prototype.$keyCode = function (code) { 
-	var sig = this.$keypress().map('.keyCode');
+	var sig = this.$keydown().map('.keyCode');
 	return arguments.length ? sig.filter(code) : sig;
 };
 
@@ -352,15 +402,37 @@ Relm.prototype.template = function(selector) {
 	}
 }
 
-function tmap(tfn, src, trackByProp) {
-	var cache = {};
-	var getKey = trackByProp ? _.propGetter(trackByProp) : JSON.stringify;
+function ArrayChange(type, data) {
+	this.type = type;
+	this.data = data;
+}
+_.each(['add', 'remove', 'update', 'insert', 'reposition'], function(entry) {
+   ArrayChange[entry] = entry;
+});
+
+
+function Map() {
+	this.keys = [],
+	this.vals = [];
+}
+
+Map.prototype.set = function (key, val) {
+	this.keys.push(key);
+	this.vals.push(val);
+	return val;
+}
+Map.prototype.get = function (key) {
+	var idx = this.keys.indexOf(key);
+	return idx >= 0 ? this.vals[idx] : undefined;
+}
+
+function tmap(tfn, src) {
+	var cache = new Map();
 	return src.map(sync);
-	
+
 	function sync(arr) {
 		return _.map( arr, function(obj) {
-			var key = getKey(obj);
-			return cache[key] || (cache[key] = tfn(obj));
+			return cache.get(obj) || cache.set(obj, tfn(obj) );
 		});	
 	}
 }
@@ -371,12 +443,17 @@ module.exports = {
 	$: elm,
 	$$: allElms
 }
-},{"../reactive.js":5,"../static.js":7}],3:[function(require,module,exports){
+},{"../reactive.js":5,"../static.js":8}],3:[function(require,module,exports){
 
+
+var relm = require("./dom.js");
 
 window.ss = require('../reactive.js');
 window.ss._ = require('../static.js');
-},{"../reactive.js":5,"../static.js":7}],4:[function(require,module,exports){
+window.su = require('../reactiveUtils.js');
+window.ss.$ = relm.$;
+window.ss.$$ = relm.$$;
+},{"../reactive.js":5,"../reactiveUtils.js":6,"../static.js":8,"./dom.js":2}],4:[function(require,module,exports){
 function Neant() {};
 
 Neant.prototype.toString = function() {
@@ -419,6 +496,10 @@ ss.now = function now(val) {
     return s;
 };
 
+ss.const = function(val) {
+	return signal(val);
+}
+
 ss.makeSig = function(s) {	
 	return isSig( s ) ? s : signal(s);
 }
@@ -428,7 +509,6 @@ ss.collect = function collect( sources, cb ) {
 	res.sources = _.map( sources, ss.makeSig);
 	res.startValues = _.map( res.sources, _.propGetter('$$currentValue'), sample );
 	res.handlers = _.map( res.sources, handler );
-	res.log = '[' + _.map( res.sources, function(s) { return s.$$log }).join(', ') + ']';	
 	res.activate = _.bindl(_.each, res.sources, connect );
 	res.deactivate = _.bindl(_.each, res.sources, disconnect );
 	return res;
@@ -449,7 +529,6 @@ ss.combine = function combine( sources, fn, discr ) {
 	sources = _.map( sources, ss.makeSig );
 	var collection = ss.collect( sources, handle );
 	var sig = signal( !discr ? fn( collection.startValues, null, -1 ) : neant );
-	sig.name(collection.log);
 	
 	sig.activate = function() {
 		collection.activate();
@@ -522,7 +601,7 @@ Function.prototype.lift = function() {
 }
 
 ss.filter = function filter(sig, test) {
-	test = _.fn( test, _.eq(test) );
+	test = _.fn( test, test instanceof RegExp ? test.exec.bind(test) : _.eq(test) );
 		
 	return ss.combine( [sig], function( values, src, idx ) {
 		if ( !src || !test(values[0]) ) return neant;
@@ -540,10 +619,12 @@ ss.def = function def( start, reactions /*, ... */ ) {
 			return s[0];
 		});
 
-	return ss.combine( sigs, function( values, src, idx ) {
+	var res = ss.combine( sigs, function( values, src, idx ) {
 		return !src ?	start :  
 						( current = handlers[idx](values[idx], current) )
 	});
+	res.name('def('+start+', ' + _.map(sigs, _.propGetter('$$name')) + ')' );
+	return res;
 };
 
 ss.bState = function bstate(start, evOn, evOff) {
@@ -566,17 +647,55 @@ ss.and = ss.lift(_.and);
 ss.or  = ss.lift(_.or);
 ss.if = ss.lift(_.if);
 
+Signal.prototype.until = function (event) {
+	if(this.$$discrete)  throw Error('Until must be called on a conitnuous signal');
+	var curSrc = this,
+		sig = new Signal(this.$$currentValue),
+		emit = sig.$$emit.bind(sig);
+	
+	curSrc.on(emit);
+	event.on(setSig);
+	return sig;
+	
+	function setSig(src) {
+		src = ss.makeSig(src);
+		if(src.$$discrete)
+			throw Error('Until must swtich to a conitnuous signal');
+		curSrc.off(emit);
+		curSrc = src;
+		curSrc.on(emit);
+		event.off(setSig);
+		sig.$$currentValue = curSrc.$$currentValue;
+		sig.$$emit(sig.$$currentValue);
+	}
+}
+
+Signal.prototype.switch = function(ev) {
+	var curSrc,
+		sig = new Signal(this.$$currentValue),
+		emit = sig.$$emit.bind(sig);
+	
+	ev.tap(setSig);
+	setSig(this, true);
+	return sig;
+	
+	function setSig(src, isStart) {
+		curSrc && curSrc.tapOff(emit);
+		curSrc = ss.makeSig(src).tap(emit);
+		!isStart && emit(src.$$currentValue);	
+	}
+}
 
 Signal.prototype.map = function() {
-	return ss.map( this, _.template.apply( null, _.slice(arguments) ) )
+	return ss.map( this, _.pluck.apply( null, _.slice(arguments) ) ).name(this.$$name+".map(fn)");
 };
 
 Signal.prototype.val = function (val) {
-	return ss.map( this, _.val(val) );
+	return ss.map( this, _.val(val) ).name(this.$$name+'.val('+val+')');
 };
 
 Signal.prototype.fold = function(start, fn) {
-	return ss.def( start, [this, fn] );
+	return ss.def( start, [this, fn] ).name(this.$$name+'.fold('+start+', fn)');
 };
 
 Signal.prototype.fold0 = function(fn) {
@@ -584,19 +703,19 @@ Signal.prototype.fold0 = function(fn) {
 };
 
 Signal.prototype.filter = function (test) {
-	return ss.filter( this, test );
+	return ss.filter( this, test ).name(this.$$name+'.filter()');
 };
 
 Signal.prototype.not = function() {
-	return ss.map(this, function(v) { return !v });
+	return ss.map(this, function(v) { return !v }).name(this.$$name+'.not()');
 };
 
 Signal.prototype.and = function() {
-	return ss.and.call(null, _.slice(arguments));
+	return ss.and.apply(null, [this].concat(_.slice(arguments)));
 };
 
 Signal.prototype.merge = function() {
-	return ss.merge.call(null, _.slice(arguments));
+	return ss.merge.apply(null, [this].concat(_.slice(arguments)));
 };
 
 Signal.prototype.counter = function() {
@@ -611,7 +730,7 @@ Signal.prototype.keep = function(start) {
 
 _.each( ['eq', 'notEq', 'gt', 'gte', 'lt', 'lte'], function( key ) {
 	var fpred = _[key],
-		pred = function(me, other) { return fpred(me)(other) };
+		pred = function(me, other) { return fpred(other)(me) };
 	Signal.prototype[key] = function(sig) {
 		sig = ss.makeSig(sig);
 	    return ss.map( this, sig, pred);
@@ -623,15 +742,6 @@ _.each( ['eq', 'notEq', 'gt', 'gte', 'lt', 'lte'], function( key ) {
 	    return this[key](sig).filter(_.isTrue);
 	};
 });
-
-
-
-Signal.prototype.tap = function(proc) {
-	return ss.map(this, function(v) {
-		proc(v);
-		return v;
-	})
-}
 
 Signal.prototype.printDeps = function(level) {
 	level = level || 0;
@@ -661,7 +771,80 @@ function indent(lev) {
 
 
 module.exports = ss;
-},{"./neant.js":4,"./signal.js":6,"./static.js":7}],6:[function(require,module,exports){
+},{"./neant.js":4,"./signal.js":7,"./static.js":8}],6:[function(require,module,exports){
+var _ = require("./static.js"),
+    ss = require("./reactive.js"),
+    signal = ss.signal;
+    
+var su = {}
+    
+su.timeout = function(ms) {
+	var sig = ss.signal(0);
+	setTimeout(function() {
+		sig.$$emit(ms);
+	}, ms);
+	return sig;
+}
+    
+su.timer = function timer ( prec, startEvOrDelay, stopEvOrTicks  ) {
+	var iv,
+		sig = signal(0),
+		start = ss.isSig(startEvOrDelay) ? startEvOrDelay : 
+				isFinite(startEvOrDelay) ? su.timeout(startEvOrDelay) :
+				/* otherwise			*/ ss.now(),
+				
+		stop =  ss.isSig(stopEvOrTicks) ? stopEvOrTicks : 
+				isFinite(stopEvOrTicks)  ? sig.whenEq(stopEvOrTicks) :
+				ss.never();
+	
+	start.on(startTimer);
+	stop.on(stopTimer);
+	return sig;
+	
+	function startTimer() { 
+	    iv = setInterval( emit, prec );
+	    start.off(startTimer);
+	}
+	
+	function stopTimer() {
+		if(iv) {
+			clearInterval(iv);
+		}
+		stop.off( stopTimer );
+	}
+	
+	function emit() { 
+		sig.$$emit( sig.$$currentValue + 1 );
+	}
+};
+
+su.clock = function clock( start, stop ) {
+	return su.timer( 1000, start, stop ).map( function( ms ) { return new Date(ms); } )
+};
+
+su.seconds = function seconds( start, stop ) {
+	return su.timer( 1000, start, stop );
+};
+
+su.fromArray = function signalFromArray(array, interval, delay) {
+	return interval ? withInterval() : withoutInterval();
+
+	function withInterval() {
+		return su.timer(interval, delay || 0, array.length).map(_.objGetter(array));
+	}
+	
+	function withoutInterval() {
+		var sig = signal();
+		setTimeout(function() {
+			_.each(array, sig.$$emit.bind(sig));
+		}, 0);
+		return sig;
+	}
+};
+
+
+module.exports = su;
+},{"./reactive.js":5,"./static.js":8}],7:[function(require,module,exports){
 var _ = require("./static.js"),
 	neant = require('./neant.js');
 
@@ -678,11 +861,10 @@ EventHelper.prototype.off = function(slot) {
     _.remove(this.slots, slot); 
 };
 
-EventHelper.prototype.emit = function (data) { 
-	_.each( 
-	    this.slots, 
-	    _.callw( data )
-    ); 
+EventHelper.prototype.emit = function (data) {
+	for(var i = 0, len = this.slots.length; i < len; i++ ) {
+		this.slots[i](data);
+	}
 };
 
 
@@ -698,6 +880,7 @@ function Signal() {
 	this.$$name = 'anonym';
 	this.$$sources = [];
 	this.$$deps = [];
+	this.$$todos = [];
 }
 
 
@@ -708,8 +891,15 @@ Signal.prototype.name = function(name) {
 }
 
 Signal.prototype.log = function(log) {
-    this.$$log = arguments.length ? log : true;
+    this.$$name = log;
+    this.$$log = true;
     return this;
+}
+
+Signal.prototype.$$execTodos = function(v) {
+    for(var i = 0, len = this.$$todos.length; i < len; i++) {
+    	this.$$todos[i](v);
+    }
 }
 
 Signal.prototype.$$emit = function(val) {
@@ -718,20 +908,36 @@ Signal.prototype.$$emit = function(val) {
 	if( !this.$$discrete )
 		this.$$currentValue = val;
 	this.$$valueEvent.emit(val);
+	this.$$execTodos(val);
 }
 
 Signal.prototype.on = function(listener) {
     this.$$valueEvent.on(listener);
+    return this;
 }
 
 Signal.prototype.off = function(listener) {
     this.$$valueEvent.off(listener);
+    return this;
 }
 
-Signal.prototype.activate = Signal.prototype.deactivate = function() {}
+Signal.prototype.tap = function(proc) {
+    _.add(this.$$todos, proc, true);
+    if(this.$$currentValue !== neant)
+        proc(this.$$currentValue);
+    return this;
+}
+
+Signal.prototype.tapOff = function(proc) {
+    _.remove(this.$$todos, proc);
+    return this;
+}
+
+Signal.prototype.activate = function() {}
+Signal.prototype.deactivate = function() {}
 
 module.exports = Signal;
-},{"./neant.js":4,"./static.js":7}],7:[function(require,module,exports){
+},{"./neant.js":4,"./static.js":8}],8:[function(require,module,exports){
 
 
 var _ = {};
@@ -943,13 +1149,13 @@ _.scanner = function( seed, fn ) {
 }
 
 /*
-template(fn, args...) 										-> fn(args..., v)
-template('.*.prop') 										-> v[*]['prop']
-template('.*.meth(), args...') 							-> v[*]['meth'](args...)
-template(['.*.prop1, '.*.meth()'], args...) 				-> [ v[*]['prop'], v[*]['meth'](args...) ]
-template({prop1: '.*.prop', prop2: '.*.meth()'}, args...)	-> { prop1: v[*]['prop'], prop2: v[*]['meth'](args...) }
+pluck(fn, args...) 										-> fn(args..., v)
+pluck('.*.prop') 										-> v[*]['prop']
+pluck('.*.meth(), args...') 							-> v[*]['meth'](args...)
+pluck(['.*.prop1, '.*.meth()'], args...) 				-> [ v[*]['prop'], v[*]['meth'](args...) ]
+pluck({prop1: '.*.prop', prop2: '.*.meth()'}, args...)	-> { prop1: v[*]['prop'], prop2: v[*]['meth'](args...) }
 */
-_.template = function( config, args /*...*/ ) {
+_.pluck = function( config, args ) {
 	args = _.slice(arguments, 1);
 	var tpl = makeGetter(config);
 	if( _.isArray(tpl) )
